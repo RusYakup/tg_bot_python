@@ -4,11 +4,18 @@ from dotenv import load_dotenv, find_dotenv
 import requests
 import json
 
+
+# TODO: Need to use logging library to print logs. Log level must be adjustable via env variables. Detail logs needed
+#  for debugging should use with debug log level. Logs that used to make clearly what is going on in the app,
+#  can use info log level.
+
 load_dotenv(find_dotenv())
 
 bot = telebot.TeleBot(os.environ['TOKEN'])
 
 API_KEY_weather = (os.environ['API_KEY'])
+
+# TODO: The app must write to the log error and exit in case when API_KEY or TOKEN is not defined via environment variables
 
 cityy = []
 
