@@ -18,10 +18,16 @@ def start_message(message):
     markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
     btn1 = telebot.types.KeyboardButton('/help')
     btn2 = telebot.types.KeyboardButton('/change_city')
+    # TODO: need to use one style for all buttons -> lower case
     btn3 = telebot.types.KeyboardButton('/Current_weather')
     btn4 = telebot.types.KeyboardButton('/weather_forecast')
     markup.add(btn1, btn2, btn3, btn4)
+    # TODO: need to add possibility to choose language bu user: Russian/English. Be default use English.
+    #  All further interaction with user must be using requested language
+    # TODO: It's more preferable to request the name of city in the separate action - change_city
     bot.send_message(message.chat.id, "Введите название города")
+    # TODO: It's not clear what kind of bot it is for user. Need to add more context in the greeting message.
+    # Something like: Hello, I am ...... I can help you with ... Press needed button...
     bot.register_next_step_handler(message, add_city)
 
 
@@ -33,6 +39,8 @@ def change_city(message):
 
 @bot.message_handler(commands=['help'])
 def help_message(message):
+    #  TODO: will be better to gather all sentences in the tuple and build full message in cycle adding \n in the and
+    #   of each sentence. Will be easier for supporting. Or prepare dict with command: description and use it in cycle
     bot.send_message(message.chat.id,
                      "/help - помощь\n/change_city - изменить город\n/Current_weather - погода сегодня\n/weather_forecast - погода на нужную дату")
 
@@ -60,10 +68,16 @@ def weather(message):
             current_weather = data["current"]
             location = data["location"]
         else:
+            # TODO: is it possible to check what kind of error happened? For example: 404 - may be city not found.
+            # 400 - bad request. 500 - server error.... We have to print proper message to the user. If some internal
+            # error happened, we should use common context messsage
             bot.send_message(message.chat.id, "Ошибка получения данных о погоде, проверьте название города")
+            # TODO: Need to return here?
     except Exception as e:
         bot.send_message(message.chat.id, f"Произошла ошибка: {e}")
+        # TODO: Need to return here?
 
+    # TODO: Will be better to create separate module called helpers.py and put such functions there.
     def wind():
         if current_weather["wind_dir"] == "N":
             return "Северный"
