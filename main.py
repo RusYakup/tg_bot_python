@@ -1,5 +1,6 @@
 import os
 import telebot
+# TODO: dotenv lib is not added in Pipfile. Need to add it.
 from dotenv import load_dotenv, find_dotenv
 import requests
 import json
