@@ -4,6 +4,7 @@ from dotenv import load_dotenv, find_dotenv
 import requests
 import json
 from helpers import *
+from models import *
 
 # TODO: Need to use logging library to print logs. Log level must be adjustable via env variables. Detail logs needed
 #  for debugging should use with debug log level. Logs that used to make clearly what is going on in the app,
@@ -61,6 +62,14 @@ def change_city(message):
     bot.send_message(message.chat.id, "Введите название города:")
     bot.register_next_step_handler(message, add_city)
 
+def add_city(message):
+    city_user = message.text
+    cityy.append(city_user)
+    if len(cityy) > 1:
+        cityy.pop(0)
+    print(cityy)
+    weather(message)
+
 
 @bot.message_handler(commands=['help'])
 def help_message(message):
@@ -75,48 +84,25 @@ def help_message(message):
     bot.send_message(message.chat.id, full_msg)
 
 
-@bot.message_handler(content_types=['new_city'])
-def add_city(message):
-    city_user = message.text
-    cityy.append(city_user)
-    if len(cityy) > 1:
-        cityy.pop(0)
-    print(cityy)
-    weather(message)
-
-
 @bot.message_handler(comands=['current_weather'])
 def weather(message):
     response = requests.get(f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={cityy[0]}')
     data = json.loads(response.text)
-    print(data)
-    print(today_date)
     try:
         if response.status_code == 200:
-            data = json.loads(response.text)
-            print(data)
-            current_weather = data["current"]
-            # forecast_date = data['forecast']['forecastday'][0]['date']
-            forecast = data['forecast']['forecastday'][0]['day']
-            location = data['location']
+            weather_data = WeatherData.parse_obj(data)
+            curernt_weather = weather_data.current
+            forecast = DayDetails.parse_obj(data['forecast']['forecastday'][0]['day'])
+            location = weather_data.location
 
-            if forecast["maxtemp_c"] > 2:
-                bot.send_message(message.chat.id, f'{location["name"]} ({location["region"]}): {location["localtime"]}\n'
-                                                  f'Температура {current_weather["temp_c"]}°C (ощущается как {current_weather["feelslike_c"]}°C)\n'
-                                                  f'Максимальная температура сегодня: {round(forecast["maxtemp_c"])}°C\nМинимальная температура сегодня: {round(forecast["mintemp_c"])}°C\n'
-                                                  f'Ветер {wind(current_weather["wind_dir"])} {round(current_weather["wind_kph"] / 3.6)} м/с (с порывами до '
-                                                  f'{round(current_weather["gust_kph"] / 3.6)} м/с)\n'
-                                                  f'Влажность {current_weather["humidity"]} %\n'
-                                                  f'Вероятность дождя {forecast["daily_chance_of_rain"]}%')
+            bot.send_message(message.chat.id, f"{location.name} ({location.region}): {location.localtime}\n"
+                                              f"Температура: {curernt_weather.temp_c}°C (ощущается как {curernt_weather.feelslike_c}°C)\n"
+                                              f"Максимальная температура: {forecast.maxtemp_c}°C\n"
+                                              f"Минимальная температура: {forecast.mintemp_c}°C\n"
+                                              f"{wind(curernt_weather.wind_dir, curernt_weather.wind_kph, forecast.maxwind_kph)}\n"
+                                              f"Влажность {curernt_weather.humidity}% \n"
+                                              f"Веротность осадков: {forecast.daily_chance_of_rain if curernt_weather.temp_c > 0 else forecast.daily_chance_of_snow}%")
 
-            else:
-                bot.send_message(message.chat.id, f'{location["name"]} ({location["region"]}): {location["localtime"]}\n'
-                                                  f'Температура {current_weather["temp_c"]}°C (ощущается как {current_weather["feelslike_c"]}°C)\n'
-                                                  f'Максимальная температура сегодня: {forecast["maxtemp_c"]}°C\nМинимальная температура сегодня: {forecast["mintemp_c"]}°C\n'
-                                                  f'Ветер {wind(current_weather["wind_dir"])} {round(current_weather["wind_kph"] / 3.6)} м/с (с порывами до '
-                                                  f'{round(current_weather["gust_kph"] / 3.6)} м/с)\n'
-                                                  f'Влажность {current_weather["humidity"]} %\n'
-                                                  f'Вероятность снега {forecast["daily_chance_of_snow"]}%')
         else:
             #         # TODO: is it possible to check what kind of error happened? For example: 404 - may be city not found.
             #         # 400 - bad request. 500 - server error.... We have to print proper message to the user. If some internal
@@ -124,30 +110,29 @@ def weather(message):
             bot.send_message(message.chat.id, "Ошибка получения данных о погоде, проверьте название города")
     #         # TODO: Need to return here?
     except Exception as e:
-        bot.send_message(message.chat.id, f"Произошла ошибка: {e}")
+        bot.send_message(message.chat.id, f"Произошла ошибка:")
+        print(e)
     #     # TODO: Need to return here?
 
 
 date = []
 
 
-#
+
 @bot.message_handler(commands=['weather_forecast'])
 def weather_forecast(message):
     bot.send_message(message.chat.id, f'Введите дату в формате ГГГГ-ММ-ДД')
-    bot.register_next_step_handler(message, get_weather_date(message))
+    bot.register_next_step_handler(message, get_date(message))
 
+def get_date(message):
+    get_date = message.text
+    date.append(get_date)
+    if len(date) > 1:
+        date.pop(0)
+    print(date)
+    get_weather(message)
 #
-# def get_weather_date(message):
-#     get_date = message.text
-#     date.append(get_date)
-#     if len(date) > 1:
-#         date.pop(0)
-#     print(date)
 #
-#     get_weather(message)
-
-
 # def get_weather(message):
 #     # bot.send_message(message.chat.id, f'Введите дату в формате ГГГГ-ММ-ДД')
 #     # bot.register_next_step_handler(message, get_weather_date)
@@ -183,4 +168,34 @@ def weather_forecast(message):
 
 #
 #
+
+
+@bot.message_handler(content_types=['text'])
+def weather1(message):
+    response = requests.get(f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={cityy[0]}')
+    data = json.loads(response.text)
+    try:
+        if response.status_code == 200:
+            weather_data = WeatherData.parse_obj(data)
+            curernt_weather = weather_data.current
+            # day_details_instance = weather_data.forecast['forecastday'][0].day
+            forecast = DayDetails.parse_obj(data['forecast']['forecastday'][0]['day'])
+            location = weather_data.location
+
+            print(forecast)
+
+            # print(f"current_wetaher :            {curernt_weather}")
+            # print(f"forecast :                   {forecast}")
+            # print(f"location :                   {location}")
+            print(f"{location.name}({location.region}): {location.localtime}\n"
+                  f"Температура: {curernt_weather.temp_c}°C (ощущается как {curernt_weather}°C)\n"
+                  f"Максимальная температура сегодня: {forecast.maxtemp_c}°C\n"
+                  f"Минимальная температура сегодня: {forecast.mintemp_c}°C\n"
+                  f"Ветер {wind(curernt_weather.wind_dir, curernt_weather.wind_kph)} м/с (с порывами до ")
+
+            # print(location)
+    except ValidationError as e:
+        print(f"Структура данных не является валидной: {e}")
+
+
 bot.infinity_polling()
