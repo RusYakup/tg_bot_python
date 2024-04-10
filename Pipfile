@@ -6,7 +6,9 @@ name = "pypi"
 [packages]
 aiohttp = "*"
 requests = "*"
-pyTelegramBotAPI = "4.16.1 "
+pyTelegramBotAPI = "==4.16.1 "
+python-dotenv = "==1.0.1"
+pydantic = "==2.6.4"
 
 [dev-packages]
 coverage = "*"
