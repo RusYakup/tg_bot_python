@@ -5,6 +5,8 @@ import requests
 import json
 from helpers import *
 from models import *
+from pydantic import ValidationError
+from datetime import date, datetime, timedelta
 
 # TODO: Need to use logging library to print logs. Log level must be adjustable via env variables. Detail logs needed
 #  for debugging should use with debug log level. Logs that used to make clearly what is going on in the app,
@@ -50,7 +52,9 @@ def start_message(message):
     #  All further interaction with user must be using requested language
 
     bot.send_message(message.chat.id,
-                     'Привет! WeatherForecastBot - ваш надежный помощник для получения прогноза погоды.')
+                     f'Привет! Я - WeatherForecastBot, твой личный помощник для получения точного прогноза погоды.'
+                     f' Я могу предоставить тебе информацию о погоде в любом городе. Просто напиши мне название '
+                     f'города, и я скажу тебе, что тебя ждет! Начнем?')
     # TODO: It's not clear what kind of bot it is for user. Need to add more context in the greeting message.
     # Something like: Hello, I am ...... I can help you with ... Press needed button...
 
@@ -62,12 +66,13 @@ def change_city(message):
     bot.send_message(message.chat.id, "Введите название города:")
     bot.register_next_step_handler(message, add_city)
 
+
 def add_city(message):
     city_user = message.text
     cityy.append(city_user)
     if len(cityy) > 1:
         cityy.pop(0)
-    print(cityy)
+    print(f"Пользователь сменил город: {cityy}")
     weather(message)
 
 
@@ -84,118 +89,136 @@ def help_message(message):
     bot.send_message(message.chat.id, full_msg)
 
 
-@bot.message_handler(comands=['current_weather'])
+@bot.message_handler(commands=['current_weather'])
 def weather(message):
     response = requests.get(f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={cityy[0]}')
     data = json.loads(response.text)
+
     try:
         if response.status_code == 200:
             weather_data = WeatherData.parse_obj(data)
-            curernt_weather = weather_data.current
+            current_weather = weather_data.current
             forecast = DayDetails.parse_obj(data['forecast']['forecastday'][0]['day'])
             location = weather_data.location
 
-            bot.send_message(message.chat.id, f"{location.name} ({location.region}): {location.localtime}\n"
-                                              f"Температура: {curernt_weather.temp_c}°C (ощущается как {curernt_weather.feelslike_c}°C)\n"
-                                              f"Максимальная температура: {forecast.maxtemp_c}°C\n"
-                                              f"Минимальная температура: {forecast.mintemp_c}°C\n"
-                                              f"{wind(curernt_weather.wind_dir, curernt_weather.wind_kph, forecast.maxwind_kph)}\n"
-                                              f"Влажность {curernt_weather.humidity}% \n"
-                                              f"Веротность осадков: {forecast.daily_chance_of_rain if curernt_weather.temp_c > 0 else forecast.daily_chance_of_snow}%")
+            weather_msg = (
+                f"{location.name} ({location.region}): {location.localtime}\n"
+                f"Температура: {current_weather.temp_c}°C (ощущается как {current_weather.feelslike_c}°C)\n"
+                f"Максимальная температура: {forecast.maxtemp_c}°C\n"
+                f"Минимальная температура: {forecast.mintemp_c}°C\n"
+                f"{wind(current_weather.wind_dir, current_weather.wind_kph, forecast.maxwind_kph)}\n"
+                f"Влажность {current_weather.humidity}% \n"
+                f"Веротность осадков: {forecast.daily_chance_of_rain if current_weather.temp_c > 0 else forecast.daily_chance_of_snow}%")
 
+            bot.send_message(message.chat.id, weather_msg)
+            return print("current_weather: Данные успешно обработаны")
+
+        elif response.status_code == 400:
+            error_code = data['error']['code']
+            if error_code == 1006:
+                bot.send_message(message.chat.id, "Город не найден, проверьте правильность названия города")
+                print("Город не найден Response 400: code 1006")
+            elif error_code == 9999:
+                bot.send_message(message.chat.id, "Сервер временно недоступен, попробуйте позже")
+                print("Сервер временно недоступен Response 400: code 9999")
+            elif error_code == 1005:
+                print("URL-адрес запроса API недействителен. Response 400: code 1005")
+            else:
+                print("Неизвестная ошибка Response 400")
+                bot.send_message(message.chat.id, "Неизвестная ошибка")
+        elif response.status_code == 403:
+            print(f"Response 403: {data['error']['message']}")
+            bot.send_message(message.chat.id,
+                             "Произошла техническая ошибка, попробуйте позже или обратитесь в поддержку")
         else:
-            #         # TODO: is it possible to check what kind of error happened? For example: 404 - may be city not found.
-            #         # 400 - bad request. 500 - server error.... We have to print proper message to the user. If some internal
-            #         # error happened, we should use common context messsage
-            bot.send_message(message.chat.id, "Ошибка получения данных о погоде, проверьте название города")
-    #         # TODO: Need to return here?
+            print(f"Response {response.status_code}: {data['error']['message']}")
+            bot.send_message(message.chat.id, "Ошибка получения данных о погоде, попробуйте позже")
+        return "Произошла ошибка"
+    except ValidationError as e:
+        print(f"Ошибка валидации данных: {e}")
+    except Exception as e:
+        bot.send_message(message.chat.id, f"Произошла ошибка")
+        print(e)
+    return print("Произошла ошибка")
+
+
+date_difference = []  # list of days between today and specific date for weather forecast
+
+today_date = date.today()
+@bot.message_handler(commands=['weather_forecast'])
+def weather_forecast(message):
+
+    max_date = today_date + timedelta(days=10)
+    bot.send_message(message.chat.id, f'Введите дату в формате ГГГГ-ММ-ДД в диапозоне от {today_date} до {max_date}:')
+    bot.register_next_step_handler(message, add_day)
+
+
+def add_day(message):
+
+    try:
+        input_date = datetime.strptime(message.text, "%Y-%m-%d").date()
+        if (input_date - today_date).days <= 10:
+            date_difference.append((input_date - today_date).days + 1)
+            if len(date_difference) > 1:
+                date_difference.pop(0)
+            get_weather_forecast(message)
+        else:
+            max_date = today_date + timedelta(days=10)
+            bot.send_message(message.chat.id, f'Введенная дата должна быть не дальше {max_date}.')
+    except ValueError:
+        bot.send_message(message.chat.id, "Неверный формат даты. Введите дату в формате ГГГГ-ММ-ДД")
+
+
+def get_weather_forecast(message):
+    response = requests.get(
+        f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={cityy[0]}&days={date_difference[0]}&aqi=no&alerts=no')
+    data = json.loads(response.text)
+    correction_num = int(date_difference[0] - 1)
+    try:
+        if response.status_code == 200:
+            weather_data = WeatherData.parse_obj(data)
+            current_weather = weather_data.current
+            forecast_data = ForecastForecastDay.parse_obj(data['forecast']['forecastday'][correction_num])
+            location = weather_data.location
+
+            forecast_weather_msg = (
+                f"Предоставлен прогноз на {forecast_data.date}\n"
+                f"{location.name} ({location.region}):\n"
+                f"Максимальная температура: {forecast_data.day.maxtemp_c}°C\n"
+                f"Минимальная температура: {forecast_data.day.mintemp_c}°C\n"
+                f"{wind(current_weather.wind_dir, current_weather.wind_kph, forecast_data.day.maxwind_kph)}\n"
+                f"Влажность {forecast_data.day.avghumidity}% \n"
+                f"Веротность осадков: {forecast_data.day.daily_chance_of_rain if forecast_data.day.avgtemp_c > 0 else forecast_data.day.daily_chance_of_snow}%")
+
+            bot.send_message(message.chat.id, forecast_weather_msg)
+            print(f"weather_forecast: Данные успешно обработаны")
+        elif response.status_code == 400:
+            error_code = data['error']['code']
+            if error_code == 1006:
+                bot.send_message(message.chat.id, "Город не найден, проверьте правильность названия города")
+                print("Город не найден Response 400: code 1006")
+            elif error_code == 9999:
+                bot.send_message(message.chat.id, "Сервер временно недоступен, попробуйте позже")
+                print("Сервер временно недоступен Response 400: code 9999")
+            elif error_code == 1005:
+                print("URL-адрес запроса API недействителен. Response 400: code 1005")
+            else:
+                print("Неизвестная ошибка Response 400")
+                bot.send_message(message.chat.id, "Неизвестная ошибка")
+        elif response.status_code == 403:
+            print(f"Response 403: {data['error']['message']}")
+            bot.send_message(message.chat.id,
+                             "Произошла техническая ошибка, попробуйте позже или обратитесь в поддержку")
+        else:
+            print(f"Response {response.status_code}: {data['error']['message']}")
+            bot.send_message(message.chat.id, "Ошибка получения данных о погоде, попробуйте позже")
+        return "Произошла ошибка"
+    except ValidationError as e:
+        print(f"Ошибка валидации данных: {e}")
     except Exception as e:
         bot.send_message(message.chat.id, f"Произошла ошибка:")
         print(e)
-    #     # TODO: Need to return here?
-
-
-date = []
-
-
-
-@bot.message_handler(commands=['weather_forecast'])
-def weather_forecast(message):
-    bot.send_message(message.chat.id, f'Введите дату в формате ГГГГ-ММ-ДД')
-    bot.register_next_step_handler(message, get_date(message))
-
-def get_date(message):
-    get_date = message.text
-    date.append(get_date)
-    if len(date) > 1:
-        date.pop(0)
-    print(date)
-    get_weather(message)
-#
-#
-# def get_weather(message):
-#     # bot.send_message(message.chat.id, f'Введите дату в формате ГГГГ-ММ-ДД')
-#     # bot.register_next_step_handler(message, get_weather_date)
-#     # date = get_weather_date(message)
-#     # weather_forecast_date = message.text
-#     response = requests.get(
-#         f'http://api.weatherapi.com/v1/future.json?key={API_KEY_weather}&q={cityy[0]}${today_date}')
-#     data = json.loads(response.text)
-#     print(data)
-#     current_weather = data["current"]
-#     forecast_date = data['forecast']['forecastday'][0]['date']
-#     forecast = data['forecast']['forecastday'][0]['day']
-#     location = data['location']
-#
-#     if forecast["maxtemp_c"] > 2:
-#         bot.send_message(message.chat.id, f'{location["name"]} ({location["region"]}): {forecast_date}\n'
-#                                           f'Температура {current_weather["temp_c"]}°C (ощущается как {current_weather["feelslike_c"]}°C)\n'
-#                                           f'Максимальная температура сегодня: {round(forecast["maxtemp_c"])}°C\nМинимальная температура сегодня: {round(forecast["mintemp_c"])}°C\n'
-#                                           f'Ветер {wind(current_weather["wind_dir"])} {round(current_weather["wind_kph"] / 3.6)} м/с (с порывами до '
-#                                           f'{round(current_weather["gust_kph"] / 3.6)} м/с)\n'
-#                                           f'Влажность {current_weather["humidity"]} %\n'
-#                                           f'Вероятность дождя {forecast["daily_chance_of_rain"]}%')
-#
-#     else:
-#         bot.send_message(message.chat.id, f'{location["name"]} ({location["region"]}): {forecast_date}\n'
-#                                           f'Температура {current_weather["temp_c"]}°C (ощущается как {current_weather["feelslike_c"]}°C)\n'
-#                                           f'Максимальная температура сегодня: {forecast["maxtemp_c"]}°C\nМинимальная температура сегодня: {forecast["mintemp_c"]}°C\n'
-#                                           f'Ветер {wind(current_weather["wind_dir"])} {round(current_weather["wind_kph"] / 3.6)} м/с (с порывами до '
-#                                           f'{round(current_weather["gust_kph"] / 3.6)} м/с)\n'
-#                                           f'Влажность {current_weather["humidity"]} %\n'
-#                                           f'Вероятность снега {forecast["daily_chance_of_snow"]}%')
-
-
-#
-#
-
-
-@bot.message_handler(content_types=['text'])
-def weather1(message):
-    response = requests.get(f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={cityy[0]}')
-    data = json.loads(response.text)
-    try:
-        if response.status_code == 200:
-            weather_data = WeatherData.parse_obj(data)
-            curernt_weather = weather_data.current
-            # day_details_instance = weather_data.forecast['forecastday'][0].day
-            forecast = DayDetails.parse_obj(data['forecast']['forecastday'][0]['day'])
-            location = weather_data.location
-
-            print(forecast)
-
-            # print(f"current_wetaher :            {curernt_weather}")
-            # print(f"forecast :                   {forecast}")
-            # print(f"location :                   {location}")
-            print(f"{location.name}({location.region}): {location.localtime}\n"
-                  f"Температура: {curernt_weather.temp_c}°C (ощущается как {curernt_weather}°C)\n"
-                  f"Максимальная температура сегодня: {forecast.maxtemp_c}°C\n"
-                  f"Минимальная температура сегодня: {forecast.mintemp_c}°C\n"
-                  f"Ветер {wind(curernt_weather.wind_dir, curernt_weather.wind_kph)} м/с (с порывами до ")
-
-            # print(location)
-    except ValidationError as e:
-        print(f"Структура данных не является валидной: {e}")
+    return "Произошла ошибка"
 
 
 bot.infinity_polling()
