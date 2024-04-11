@@ -47,8 +47,8 @@ class Current(BaseModel):
     humidity: int
 
 
-class ForecastDay(BaseModel):
-    date: dict
+class ForecastForecastDay(BaseModel):
+    date: str
     date_epoch: int
     day: DayDetails
 
