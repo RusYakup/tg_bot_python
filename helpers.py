@@ -1,7 +1,5 @@
-from pydantic import ValidationError
-from models import *
 
-вуа
+
 def wind(win_dir: str, wind_kph: float, max_wind_kph: float) -> str:
     """
         1) translates wind direction from English to Russian
@@ -37,3 +35,5 @@ def wind(win_dir: str, wind_kph: float, max_wind_kph: float) -> str:
         return f"Ветер {direction[win_dir]} {wind_ms}м/с (с порывами до {max_wind_ms} м/с)"
     else:
         return "Направление ветра неизвестно"
+
+
