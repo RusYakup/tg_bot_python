@@ -1,6 +1,13 @@
 from pydantic import BaseModel, conlist
 from typing import List
 
+
+class Condition(BaseModel):
+    text: str
+    icon: str
+    code: int
+
+
 class DayDetails(BaseModel):
     maxtemp_c: float
     maxtemp_f: float
@@ -59,4 +66,17 @@ class WeatherData(BaseModel):
     forecast: dict
 
 
+class Locations(BaseModel):
+    name: str
+    region: str
+    country: str
+    lat: float
+    lon: float
+    tz_id: str
+    localtime_epoch: int
+    localtime: str
 
+
+class StatisticsWeather(BaseModel):
+    Location: Locations
+    forecast: dict
