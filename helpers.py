@@ -1,5 +1,3 @@
-
-
 def wind(win_dir: str, wind_kph: float, max_wind_kph: float) -> str:
     """
         1) translates wind direction from English to Russian
@@ -37,3 +35,59 @@ def wind(win_dir: str, wind_kph: float, max_wind_kph: float) -> str:
         return "Направление ветра неизвестно"
 
 
+def weather_condition(precipitation: str) -> str:
+    weather_dict = {
+        "Sunny": "Солнечно",
+        "Partly Cloudy": "Переменная облачность",
+        "Cloudy": "Облачно",
+        "Overcast": "Пасмурная погода",
+        "Mist": "Туман",
+        "Patchy rain possible": "Возможен кратковременный дождь",
+        "Patchy snow possible": "Возможен кратковременный снег",
+        "Patchy sleet possible": "Возможен кратковременный мокрый снег",
+        "Patchy freezing drizzle possible": "Возможен кратковременный ледяной дождь",
+        "Thundery outbreaks possible": "Возможны грозовые вспышки",
+        "Blowing Snow": "Низовая метель",
+        "Blizzard": "Метель",
+        "Fog": "Туман",
+        "Freezing fog": "Ледяной туман",
+        "Patchy light drizzle": "Небольшой мелкий дождь",
+        "Light drizzle": "Легкая морось",
+        "Freezing drizzle": "Изморозь",
+        "Heavy freezing drizzle": "Сильный ледяной дождь",
+        "Patchy light rain": "Небольшой дождь",
+        "Light rain": "Легкий дождь",
+        "Moderate rain at times": "Временами умеренный дождь",
+        "Moderate rain": "Умеренный дождь",
+        "Heavy rain at times": "Временами сильный дождь",
+        "Heavy rain": "Ливень",
+        "Light freezing rain": "Легкий ледяной дождь",
+        "Moderate or heavy freezing rain": "Умеренный или сильный ледяной дождь",
+        "Light sleet": "Легкий мокрый снег",
+        "Moderate or heavy sleet": "Умеренный или сильный мокрый снег",
+        "Patchy light snow": "Небольшой мелкий снег",
+        "Light snow": "Легкий снег",
+        "Patchy moderate snow": "Неровный умеренный снег",
+        "Moderate snow": "Умеренный снег",
+        "Patchy heavy snow": "Неровный сильный снег",
+        "Heavy snow": "Сильный снегопад",
+        "Ice pellets": "Ледяная крупа",
+        "Light rain shower": "Небольшой дождь моросит",
+        "Moderate or heavy rain shower": "Умеренный или сильный ливень",
+        "Torrential rain shower": "Проливной ливень",
+        "Light sleet showers": "Небольшой ливень с мокрым снегом",
+        "Moderate or heavy sleet showers": "Умеренный или сильный ливень с мокрым снегом",
+        "Light snow showers": "Легкий снегопад",
+        "Moderate or heavy snow showers": "Умеренный или сильный снегопад",
+        "Light showers of ice pellets": "Легкий дождь ледяных крупинок",
+        "Moderate or heavy showers of ice pellets": "Умеренные или сильные ливни ледяной крупы",
+        "Patchy light rain with thunder": "Небольшой дождь с грозой",
+        "Moderate or heavy rain with thunder": "Умеренный или сильный дождь с грозой",
+        "Patchy light snow with thunder": "Небольшой снег с грозой",
+        "Moderate or heavy snow with thunder": "Умеренный или сильный снег с грозой",
+        "Patchy rain nearby": "Возможен кратковременный дождь",
+    }
+    if precipitation in weather_dict:
+        return weather_dict[precipitation]
+    else:
+        return precipitation
