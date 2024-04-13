@@ -16,6 +16,14 @@ import time
 
 load_dotenv(find_dotenv())
 # bot = telebot.TeleBot(os.environ['TOKEN'])
+
+# TODO: need to check that TOKEN and API_KEY are defined via environment variables. In other case need to exit the app
+# TOKEN = os.environ.get('TOKEN', None)
+# if TOKEN is None:
+#     print('TOKEN is not set. Please provide a telegram bot token.')
+#     exit(1)
+# If token is defined, we check that it's correct by accessing the API of telegram. Code that checks correctness of bot
+# token should put to the separate function that return bool type. If token is not correct, the app must exit
 TOKEN = os.environ['TOKEN']
 if TOKEN:
     bot = telebot.TeleBot(os.environ['TOKEN'])
@@ -30,6 +38,7 @@ if TOKEN:
     else:
         print('Problems accessing the API. Please check your token and internet connection')
 
+# TODO: the same comment as for TOKEN
 API_KEY_weather = (os.environ['API_KEY'])
 # TODO: The app must write to the log error and exit in case when API_KEY or TOKEN is not defined via environment variables
 if API_KEY_weather:
@@ -51,8 +60,9 @@ cityy = []
 @bot.message_handler(commands=['start'])
 def start_message(message):
     kb_reply = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
-    kb_in_line = telebot.types.InlineKeyboardMarkup()
-    btn1 = telebot.types.KeyboardButton(text="Определить местоположение", request_location=True)
+    kb_in_line = telebot.types.InlineKeyboardMarkup()  # Variable is not used -> need to remove
+    btn1 = telebot.types.KeyboardButton(text="Определить местоположение",
+                                        request_location=True)  # Variable is redeclared in the next line -> useless
     btn1 = telebot.types.KeyboardButton(text="Изменить город", request_location=True)
     kb_reply.add(btn1)
 
@@ -66,7 +76,8 @@ def start_message(message):
     change_city(message)
 
 
-cityy = []
+cityy = []  # TODO: it's declared before. Why is it here? In the code we use this variable to store string object. Why it's declared as list?
+# TODO: Location name fir variable will be better
 
 
 # Обработчик местоположения пользователя
@@ -75,13 +86,13 @@ def get_coordinates(message):
     global cityy
     latitude, longitude = message.location.latitude, message.location.longitude
     local = f'{latitude},{longitude}'
-    global cityy
+    global cityy  # TODO: we marked this variable as global before. Why is it here?
     cityy = local
     print(f"Пользователь выбрал город по локации: {cityy}")
     weather(message)
 
 
-@bot.message_handler(commands='change_city')
+@bot.message_handler(commands='change_city')  # TODO: Expected type 'list[str] | None', got 'str' instead ?
 def change_city(message):
     bot.send_message(message.chat.id, "Введите название города:")
     bot.register_next_step_handler(message, add_city)
@@ -113,9 +124,9 @@ def help_message(message):
 
 @bot.message_handler(commands=['current_weather'])
 def weather(message):
-    response = requests.get(f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={cityy}')
+    response = requests.get(f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={cityy}') # TODO: Need to use try expect block for handling http client exceptions and errors
     print(f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={cityy}')
-    data = json.loads(response.text)
+    data = json.loads(response.text) # TODO: It's preferable to handle deserialization exceptions and errors using try expect block. TypeError exception can raise here
     try:
         if response.status_code == 200:
             weather_data = WeatherData.parse_obj(data)
@@ -137,6 +148,8 @@ def weather(message):
             return print("current_weather: Данные успешно обработаны")
 
         elif response.status_code == 400:
+            # TODO: Read about DRY principle. Should avoid duplication of code.
+            #  If the same codebase use in several places, should create separate function
             error_code = data['error']['code']
             if error_code == 1006:
                 bot.send_message(message.chat.id, "Город не найден, проверьте правильность названия города")
@@ -158,6 +171,7 @@ def weather(message):
             bot.send_message(message.chat.id, "Ошибка получения данных о погоде, попробуйте позже")
         return "Произошла ошибка"
     except ValidationError as e:
+        # TODO: Need to send message to the chat here. Or can me used common response on the end of this function
         print(f"Ошибка валидации данных: {e}")
     except Exception as e:
         bot.send_message(message.chat.id, f"Произошла ошибка")
@@ -172,7 +186,7 @@ today_date = date.today()
 
 @bot.message_handler(commands=['weather_forecast'])
 def weather_forecast(message):
-    timedelta
+    timedelta  # TODO: Statement seems to have no effect
     max_date = today_date + timedelta(days=10)
     bot.send_message(message.chat.id, f'Введите дату в формате ГГГГ-ММ-ДД в диапозоне от {today_date} до {max_date}:')
     bot.register_next_step_handler(message, add_day)
@@ -195,6 +209,7 @@ def add_day(message):
 
 
 def get_weather_forecast(message):
+    # TODO: the same comment as before
     response = requests.get(
         f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={cityy}&days={date_difference[0]}&aqi=no&alerts=no')
     data = json.loads(response.text)
@@ -215,6 +230,7 @@ def get_weather_forecast(message):
                 f"Влажность {forecast_data.day.avghumidity}% \n"
                 f"Веротность осадков: {forecast_data.day.daily_chance_of_rain if forecast_data.day.avgtemp_c > 0 else forecast_data.day.daily_chance_of_snow}%\n"
                 f"{weather_condition(precipitation.text)}")
+            # TODO: Duplication of code in several places
 
             bot.send_message(message.chat.id, forecast_weather_msg)
             print(f"weather_forecast: Данные успешно обработаны")
@@ -313,9 +329,11 @@ def get_forecast_several(message):
             bot.send_message(message.chat.id, "Ошибка получения данных о погоде, попробуйте позже")
             print("Произошла ошибка")
     except ValueError:
+        #  TODO: Which case is handled here?
         bot.send_message(message.chat.id, 'Неправильный ввод, попробуйте ещё раз')
 
     except ValidationError as e:
+        #  TODO: 'ValueError', superclass of the exception class 'ValidationError', has already been caught
         print(f"Ошибка валидации данных: {e}")
 
     except Exception as e:
