@@ -1,48 +1,34 @@
 import os
+import sys
 import telebot
 import logging
 from dotenv import load_dotenv, find_dotenv
 import requests
-import json
-from helpers import wind
-from helpers import weather_condition
+from helpers import wind, get_response, weather_condition, check_bot_token
 from models import *
 from pydantic import ValidationError
 from datetime import date, datetime, timedelta
-import time
 
 # TODO: Need to use logging library to print logs. Log level must be adjustable via env variables. Detail logs needed
 #  for debugging should use with debug log level. Logs that used to make clearly what is going on in the app,
 #  can use info log level.
 
+
 load_dotenv(find_dotenv())
-# bot = telebot.TeleBot(os.environ['TOKEN'])
 
-
-# TODO: need to check that TOKEN and API_KEY are defined via environment variables. In other case need to exit the app
-# TOKEN = os.environ.get('TOKEN', None)
-# if TOKEN is None:
-#     print('TOKEN is not set. Please provide a telegram bot token.')
-#     exit(1)
-# If token is defined, we check that it's correct by accessing the API of telegram. Code that checks correctness of bot
-# token should put to the separate function that return bool type. If token is not correct, the app must exit
 TOKEN = os.environ['TOKEN']
-if TOKEN:
-    bot = telebot.TeleBot(os.environ['TOKEN'])
-    response = requests.get(f'https://api.telegram.org/bot{os.environ["TOKEN"]}/getMe')
+if not check_bot_token(TOKEN):
+    print("TOKEN is not set or is empty. Please provide a valid token.")
+    exit()
 
-    if response.status_code == 200:
-        info = response.json()
-        if info['ok'] == True:
-            print("Token tg bot verified: " + info['result']['username'])
-        else:
-            print('Error response. Please check the bot token')
-    else:
-        print('Problems accessing the API. Please check your token and internet connection')
+bot = telebot.TeleBot(os.environ['TOKEN'])
 
 # TODO: the same comment as for TOKEN
 API_KEY_weather = (os.environ['API_KEY'])
-# TODO: The app must write to the log error and exit in case when API_KEY or TOKEN is not defined via environment variables
+if not check_bot_token(API_KEY_weather):
+    print("API_KEY is not set or is empty. Please provide a valid Api key.")
+    exit()
+
 if API_KEY_weather:
     response = requests.get(f'http://api.weatherapi.com/v1/current.json?key={API_KEY_weather}&q=Kazan')
     if response.status_code == 200:
@@ -56,38 +42,7 @@ if API_KEY_weather:
 else:
     print("API_KEY_weather is not set. Please provide a valid API key.")
 
-
-def get_response(message, api_url: str) -> json:
-    try:
-        response = requests.get(api_url)
-        data = json.loads(response.text)
-        if response.status_code == 200:
-            return json.loads(response.text)
-        elif response.status_code == 400:
-            error_code = data['error']['code']
-            if error_code == 1006:
-                bot.send_message(message.chat.id, "Город не найден, проверьте правильность названия города")
-                print("Город не найден Response 400: code 1006")
-            elif error_code == 9999:
-                bot.send_message("Сервер временно недоступен, попробуйте позже")
-                print("Сервер временно недоступен Response 400: code 9999")
-            elif error_code == 1005:
-                print("URL-адрес запроса API недействителен. Response 400: code 1005")
-            else:
-                print("Неизвестная ошибка Response 400")
-                bot.send_message("Неизвестная ошибка")
-        elif response.status_code == 403:
-            print(f"Response 403: {data['error']['message']}")
-            bot.send_message("Произошла техническая ошибка, попробуйте позже или обратитесь в поддержку")
-        else:
-            print(f"Response {response.status_code}: {data['error']['message']}")
-            bot.send_message("Ошибка получения данных о погоде, попробуйте позже")
-    except Exception as e:
-        bot.send_message(message.chat.id, f"Произошла ошибка")
-        print(e)
-
-
-cityy = str
+cityy = ""
 
 
 @bot.message_handler(commands=['start'])
@@ -143,7 +98,8 @@ def help_message(message):
         ('current_weather', 'погода сегодня'),
         ('weather_forecast', 'погода на нужную дату'),
         ('forecast_for_several_days', 'погода на несколько дней'),
-        ('wheather_statistic', 'статистика за послдение 7 дней')
+        ('wheather_statistic', 'статистика за послдение 7 дней'),
+        ('prediction', 'предсказание на 3 дня'),
     )
     full_msg = '\n'.join([f'/{command} - {description}' for command, description in help_messages])
 
@@ -155,7 +111,7 @@ def weather(message):
     url_current = f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={cityy}'
     try:
 
-        data = get_response(message, url_current)
+        data = get_response(message, url_current, bot)
         # response.raise_for_status()
         weather_data = WeatherData.parse_obj(data)
         current_weather = weather_data.current
@@ -176,6 +132,9 @@ def weather(message):
     except Exception as e:
         print(f"Произошла ошибка при выполнении запроса: {e}")
         bot.send_message(message.chat.id, f"Произошла ошибка при выполнении запроса")
+    # except ValidationError as e:
+    #     print(f"Неверные данные: {e}")
+
 
 date_difference = []  # list of days between today and specific date for weather forecast
 
@@ -210,7 +169,7 @@ def get_weather_forecast(message):
     # TODO: the same comment as before
     url_forecast = f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={cityy}&days={date_difference[0]}&aqi=no&alerts=no'
     try:
-        data = get_response(message, url_forecast)
+        data = get_response(message, url_forecast, bot)
         weather_data = WeatherData.parse_obj(data)
         current_weather = weather_data.current
         correction_num = int(date_difference[0] - 1)
@@ -256,7 +215,7 @@ def get_forecast_several(message):
     url_forecast_several = f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={cityy}&days={qty_days}&aqi=no&alerts=no'
     try:
         print(qty_days)
-        data = get_response(message, url_forecast_several)
+        data = get_response(message, url_forecast_several, bot)
         weather_data = WeatherData.parse_obj(data)
         current_weather = weather_data.current
         location = weather_data.location
@@ -265,6 +224,7 @@ def get_forecast_several(message):
             precipitation = Condition.parse_obj(data['forecast']['forecastday'][day_num]['day']['condition'])
             print(precipitation.text)
             forecast_data = ForecastForecastDay.parse_obj(data['forecast']['forecastday'][day_num])
+
             forecast_msg = (
                 f"Прогноз на {forecast_data.date}\n"
                 f"{location.name} ({location.region}):\n"
@@ -276,11 +236,13 @@ def get_forecast_several(message):
                 f"{weather_condition(precipitation.text)}")
 
             bot.send_message(message.chat.id, forecast_msg)
-            print(f"several forecast : Данные успешно обработаны")
+        print(f"several forecast : Данные успешно обработаны")
     except Exception as e:
         bot.send_message(message.chat.id, f"Произошла ошибка")
         print(e)
         print(f"several forecast : Ошибка при обработке данных")
+    except ValidationError as e:
+        print(e)
     return
 
 
@@ -290,8 +252,7 @@ def statistic(message):
         for days in range(7):
             statistic_date = today_date - timedelta(days=days)
             url_statistic = f'https://api.weatherapi.com/v1/history.json?key={API_KEY_weather}&q={cityy}&dt={statistic_date}'
-            data = get_response(message, url_statistic)
-            day_detailss = data['forecast']['forecastday'][0]['day']
+            data = get_response(message, url_statistic, bot)
             day_details = DayDetails.parse_obj(data['forecast']['forecastday'][0]['day'])
             day_details_data = data['forecast']['forecastday'][0]['date']
             precipitation = Condition.parse_obj(data['forecast']['forecastday'][0]['day']['condition'])
@@ -303,12 +264,52 @@ def statistic(message):
             )
 
             bot.send_message(message.chat.id, msg_statistic)
-            print(f"statistic : Данные успешно обработаны")
+        print(f"statistic : Данные успешно обработаны")
 
     except Exception as e:
         bot.send_message(message.chat.id, f"Произошла ошибка")
         print(e)
         print(f"statistic : Ошибка при обработке данных")
+
+
+@bot.message_handler(commands=['prediction'])
+def prediction(message):
+    avgtemp_c_7days = set()
+    for days in range(7):
+        statistic_date = today_date - timedelta(days=days)
+        url_prediction = f'https://api.weatherapi.com/v1/history.json?key={API_KEY_weather}&q={cityy}&dt={statistic_date}'
+        data = get_response(message, url_prediction, bot)
+        day_details = DayDetails.parse_obj(data['forecast']['forecastday'][0]['day'])
+        avgtemp_c_7days.add(day_details.avgtemp_c)
+    avgtemp_c_7days = round(sum(avgtemp_c_7days) / len(avgtemp_c_7days))
+    avgtemp_c_3days = set()
+    for days in range(3):
+        url_forecast_several = f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={cityy}&days=3&aqi=no&alerts=no'
+        try:
+            data = get_response(message, url_forecast_several, bot)
+            weather_data = WeatherData.parse_obj(data)
+            location = weather_data.location
+
+            for day_num in range(1, len(data['forecast']['forecastday'])):
+                forecast_data = ForecastForecastDay.parse_obj(data['forecast']['forecastday'][day_num])
+                avgtemp_c_3days.add(forecast_data.day.avgtemp_c)
+        except Exception as e:
+            bot.send_message(message.chat.id, f"Произошла ошибка {e}")
+            print(e)
+            print(f"statistic : Ошибка при обработке данных")
+
+    avgtemp_c_3days = round(sum(avgtemp_c_3days) / len(avgtemp_c_3days))
+
+    if avgtemp_c_7days < avgtemp_c_3days:
+        bot.send_message(message.chat.id,
+                         f"Средняя температура в ближайшие 3 дня будет {avgtemp_c_3days}°C, это на {avgtemp_c_3days - avgtemp_c_7days}°C  теплее чем за последнюю неделю")
+    if avgtemp_c_7days > avgtemp_c_3days:
+        bot.send_message(message.chat.id,
+                         f"Средняя температура в ближайшие 3 дня будет {avgtemp_c_3days} °C, это на  {avgtemp_c_7days - avgtemp_c_3days}°C холоднее чем за последнюю неделю")
+    else:
+        bot.send_message(message.chat.id,
+                         f"Средняя температура в ближайшие 3 дня будет {avgtemp_c_3days}°C, температура сохранилась как в последние 7 дней")
+    print(f"statistic : Данные успешно обработаны")
 
 
 bot.infinity_polling()
