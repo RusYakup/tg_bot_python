@@ -4,7 +4,8 @@ import logging
 from dotenv import load_dotenv, find_dotenv
 import requests
 import json
-from helpers import *
+from helpers import wind
+from helpers import weather_condition
 from models import *
 from pydantic import ValidationError
 from datetime import date, datetime, timedelta
@@ -16,6 +17,7 @@ import time
 
 load_dotenv(find_dotenv())
 # bot = telebot.TeleBot(os.environ['TOKEN'])
+
 
 # TODO: need to check that TOKEN and API_KEY are defined via environment variables. In other case need to exit the app
 # TOKEN = os.environ.get('TOKEN', None)
@@ -54,7 +56,38 @@ if API_KEY_weather:
 else:
     print("API_KEY_weather is not set. Please provide a valid API key.")
 
-cityy = []
+
+def get_response(message, api_url: str) -> json:
+    try:
+        response = requests.get(api_url)
+        data = json.loads(response.text)
+        if response.status_code == 200:
+            return json.loads(response.text)
+        elif response.status_code == 400:
+            error_code = data['error']['code']
+            if error_code == 1006:
+                bot.send_message(message.chat.id, "Город не найден, проверьте правильность названия города")
+                print("Город не найден Response 400: code 1006")
+            elif error_code == 9999:
+                bot.send_message("Сервер временно недоступен, попробуйте позже")
+                print("Сервер временно недоступен Response 400: code 9999")
+            elif error_code == 1005:
+                print("URL-адрес запроса API недействителен. Response 400: code 1005")
+            else:
+                print("Неизвестная ошибка Response 400")
+                bot.send_message("Неизвестная ошибка")
+        elif response.status_code == 403:
+            print(f"Response 403: {data['error']['message']}")
+            bot.send_message("Произошла техническая ошибка, попробуйте позже или обратитесь в поддержку")
+        else:
+            print(f"Response {response.status_code}: {data['error']['message']}")
+            bot.send_message("Ошибка получения данных о погоде, попробуйте позже")
+    except Exception as e:
+        bot.send_message(message.chat.id, f"Произошла ошибка")
+        print(e)
+
+
+cityy = str
 
 
 @bot.message_handler(commands=['start'])
@@ -76,23 +109,18 @@ def start_message(message):
     change_city(message)
 
 
-cityy = []  # TODO: it's declared before. Why is it here? In the code we use this variable to store string object. Why it's declared as list?
-# TODO: Location name fir variable will be better
-
-
 # Обработчик местоположения пользователя
 @bot.message_handler(content_types=['location'])
 def get_coordinates(message):
     global cityy
     latitude, longitude = message.location.latitude, message.location.longitude
     local = f'{latitude},{longitude}'
-    global cityy  # TODO: we marked this variable as global before. Why is it here?
     cityy = local
     print(f"Пользователь выбрал город по локации: {cityy}")
     weather(message)
 
 
-@bot.message_handler(commands='change_city')  # TODO: Expected type 'list[str] | None', got 'str' instead ?
+@bot.message_handler(commands=['change_city'])
 def change_city(message):
     bot.send_message(message.chat.id, "Введите название города:")
     bot.register_next_step_handler(message, add_city)
@@ -124,60 +152,30 @@ def help_message(message):
 
 @bot.message_handler(commands=['current_weather'])
 def weather(message):
-    response = requests.get(f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={cityy}') # TODO: Need to use try expect block for handling http client exceptions and errors
-    print(f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={cityy}')
-    data = json.loads(response.text) # TODO: It's preferable to handle deserialization exceptions and errors using try expect block. TypeError exception can raise here
+    url_current = f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={cityy}'
     try:
-        if response.status_code == 200:
-            weather_data = WeatherData.parse_obj(data)
-            current_weather = weather_data.current
-            forecast = DayDetails.parse_obj(data['forecast']['forecastday'][0]['day'])
-            location = weather_data.location
-            precipitation = Condition.parse_obj(data['forecast']['forecastday'][0]['day']['condition'])
 
-            weather_msg = (
-                f"{location.name} ({location.region}): {location.localtime}\n"
-                f"Температура: {current_weather.temp_c}°C (ощущается как {current_weather.feelslike_c}°C)\n"
-                f"Максимальная температура: {forecast.maxtemp_c}°C\n"
-                f"Минимальная температура: {forecast.mintemp_c}°C\n"
-                f"{wind(current_weather.wind_dir, current_weather.wind_kph, forecast.maxwind_kph)}\n"
-                f"Влажность {current_weather.humidity}% \n"
-                f"Веротность осадков: {forecast.daily_chance_of_rain if current_weather.temp_c > 0 else forecast.daily_chance_of_snow}%\n"
-                f"{weather_condition(precipitation.text)}")
-            bot.send_message(message.chat.id, weather_msg)
-            return print("current_weather: Данные успешно обработаны")
-
-        elif response.status_code == 400:
-            # TODO: Read about DRY principle. Should avoid duplication of code.
-            #  If the same codebase use in several places, should create separate function
-            error_code = data['error']['code']
-            if error_code == 1006:
-                bot.send_message(message.chat.id, "Город не найден, проверьте правильность названия города")
-                print("Город не найден Response 400: code 1006")
-            elif error_code == 9999:
-                bot.send_message(message.chat.id, "Сервер временно недоступен, попробуйте позже")
-                print("Сервер временно недоступен Response 400: code 9999")
-            elif error_code == 1005:
-                print("URL-адрес запроса API недействителен. Response 400: code 1005")
-            else:
-                print("Неизвестная ошибка Response 400")
-                bot.send_message(message.chat.id, "Неизвестная ошибка")
-        elif response.status_code == 403:
-            print(f"Response 403: {data['error']['message']}")
-            bot.send_message(message.chat.id,
-                             "Произошла техническая ошибка, попробуйте позже или обратитесь в поддержку")
-        else:
-            print(f"Response {response.status_code}: {data['error']['message']}")
-            bot.send_message(message.chat.id, "Ошибка получения данных о погоде, попробуйте позже")
-        return "Произошла ошибка"
-    except ValidationError as e:
-        # TODO: Need to send message to the chat here. Or can me used common response on the end of this function
-        print(f"Ошибка валидации данных: {e}")
+        data = get_response(message, url_current)
+        # response.raise_for_status()
+        weather_data = WeatherData.parse_obj(data)
+        current_weather = weather_data.current
+        forecast = DayDetails.parse_obj(data['forecast']['forecastday'][0]['day'])
+        location = weather_data.location
+        precipitation = Condition.parse_obj(data['forecast']['forecastday'][0]['day']['condition'])
+        current_msg = (
+            f"{location.name} ({location.region}): {location.localtime}\n"
+            f"Температура: {current_weather.temp_c}°C (ощущается как {current_weather.feelslike_c}°C)\n"
+            f"Максимальная температура: {forecast.maxtemp_c}°C\n"
+            f"Минимальная температура: {forecast.mintemp_c}°C\n"
+            f"{wind(current_weather.wind_dir, current_weather.wind_kph, forecast.maxwind_kph)}\n"
+            f"Влажность {current_weather.humidity}% \n"
+            f"Веротность осадков: {forecast.daily_chance_of_rain if current_weather.temp_c > 0 else forecast.daily_chance_of_snow}%\n"
+            f"{weather_condition(precipitation.text)}")
+        bot.send_message(message.chat.id, current_msg)
+        return print("current_weather: Данные успешно обработаны")
     except Exception as e:
-        bot.send_message(message.chat.id, f"Произошла ошибка")
-        print(e)
-    return print("Произошла ошибка")
-
+        print(f"Произошла ошибка при выполнении запроса: {e}")
+        bot.send_message(message.chat.id, f"Произошла ошибка при выполнении запроса")
 
 date_difference = []  # list of days between today and specific date for weather forecast
 
@@ -210,57 +208,30 @@ def add_day(message):
 
 def get_weather_forecast(message):
     # TODO: the same comment as before
-    response = requests.get(
-        f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={cityy}&days={date_difference[0]}&aqi=no&alerts=no')
-    data = json.loads(response.text)
-    correction_num = int(date_difference[0] - 1)
+    url_forecast = f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={cityy}&days={date_difference[0]}&aqi=no&alerts=no'
     try:
-        if response.status_code == 200:
-            weather_data = WeatherData.parse_obj(data)
-            current_weather = weather_data.current
-            forecast_data = ForecastForecastDay.parse_obj(data['forecast']['forecastday'][correction_num])
-            location = weather_data.location
-            precipitation = Condition.parse_obj(data['forecast']['forecastday'][0]['day']['condition'])
-            forecast_weather_msg = (
-                f"Предоставлен прогноз на {forecast_data.date}\n"
-                f"{location.name} ({location.region}):\n"
-                f"Максимальная температура: {forecast_data.day.maxtemp_c}°C\n"
-                f"Минимальная температура: {forecast_data.day.mintemp_c}°C\n"
-                f"{wind(current_weather.wind_dir, current_weather.wind_kph, forecast_data.day.maxwind_kph)}\n"
-                f"Влажность {forecast_data.day.avghumidity}% \n"
-                f"Веротность осадков: {forecast_data.day.daily_chance_of_rain if forecast_data.day.avgtemp_c > 0 else forecast_data.day.daily_chance_of_snow}%\n"
-                f"{weather_condition(precipitation.text)}")
-            # TODO: Duplication of code in several places
-
-            bot.send_message(message.chat.id, forecast_weather_msg)
-            print(f"weather_forecast: Данные успешно обработаны")
-        elif response.status_code == 400:
-            error_code = data['error']['code']
-            if error_code == 1006:
-                bot.send_message(message.chat.id, "Город не найден, проверьте правильность названия города")
-                print("Город не найден Response 400: code 1006")
-            elif error_code == 9999:
-                bot.send_message(message.chat.id, "Сервер временно недоступен, попробуйте позже")
-                print("Сервер временно недоступен Response 400: code 9999")
-            elif error_code == 1005:
-                print("URL-адрес запроса API недействителен. Response 400: code 1005")
-            else:
-                print("Неизвестная ошибка Response 400")
-                bot.send_message(message.chat.id, "Неизвестная ошибка")
-        elif response.status_code == 403:
-            print(f"Response 403: {data['error']['message']}")
-            bot.send_message(message.chat.id,
-                             "Произошла техническая ошибка, попробуйте позже или обратитесь в поддержку")
-        else:
-            print(f"Response {response.status_code}: {data['error']['message']}")
-            bot.send_message(message.chat.id, "Ошибка получения данных о погоде, попробуйте позже")
-        return "Произошла ошибка"
-    except ValidationError as e:
-        print(f"Ошибка валидации данных: {e}")
+        data = get_response(message, url_forecast)
+        weather_data = WeatherData.parse_obj(data)
+        current_weather = weather_data.current
+        correction_num = int(date_difference[0] - 1)
+        forecast_data = ForecastForecastDay.parse_obj(data['forecast']['forecastday'][correction_num])
+        location = weather_data.location
+        precipitation = Condition.parse_obj(data['forecast']['forecastday'][0]['day']['condition'])
+        forecast_weather_msg = (
+            f"Предоставлен прогноз на {forecast_data.date}\n"
+            f"{location.name} ({location.region}):\n"
+            f"Максимальная температура: {forecast_data.day.maxtemp_c}°C\n"
+            f"Минимальная температура: {forecast_data.day.mintemp_c}°C\n"
+            f"{wind(current_weather.wind_dir, current_weather.wind_kph, forecast_data.day.maxwind_kph)}\n"
+            f"Влажность {forecast_data.day.avghumidity}% \n"
+            f"Веротность осадков: {forecast_data.day.daily_chance_of_rain if forecast_data.day.avgtemp_c > 0 else forecast_data.day.daily_chance_of_snow}%\n"
+            f"{weather_condition(precipitation.text)}")
+        bot.send_message(message.chat.id, forecast_weather_msg)
+        print(f"weather_forecast: Данные успешно обработаны")
     except Exception as e:
-        bot.send_message(message.chat.id, f"Произошла ошибка:")
+        bot.send_message(message.chat.id, f"Произошла ошибка")
         print(e)
-    return "Произошла ошибка"
+        print(f"weather_forecast: Ошибка при обработке данных")
 
 
 @bot.message_handler(commands=['forecast_for_several_days'])
@@ -274,85 +245,53 @@ def forecast_for_several_days(message):
 def get_forecast_several(message):
     try:
         qty_days = int(message.text)
-        if qty_days < 1 or qty_days > 10:
-            qty_days = int(message.text) + 1
-        if not 1 <= qty_days <= 10:
-            bot.send_message(message.chat.id, 'Количество дней должно быть от 1 до 10')
-            return
-
-        response = requests.get(
-            f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={cityy}&days={qty_days}&aqi=no&alerts=no')
-        data = json.loads(response.text)
-
-        if response.status_code == 200:
-            weather_data = WeatherData.parse_obj(data)
-            current_weather = weather_data.current
-            location = weather_data.location
-
-            for day_num in range(1, len(data['forecast']['forecastday'])):
-                precipitation = Condition.parse_obj(data['forecast']['forecastday'][day_num]['day']['condition'])
-                print(precipitation.text)
-                forecast_data = ForecastForecastDay.parse_obj(data['forecast']['forecastday'][day_num])
-                forecast_msg = (
-                    f"Прогноз на {forecast_data.date}\n"
-                    f"{location.name} ({location.region}):\n"
-                    f"Максимальная температура: {forecast_data.day.maxtemp_c}°C\n"
-                    f"Минимальная температура: {forecast_data.day.mintemp_c}°C\n"
-                    f"{wind(current_weather.wind_dir, current_weather.wind_kph, forecast_data.day.maxwind_kph)}\n"
-                    f"Влажность {forecast_data.day.avghumidity}% \n"
-                    f"Вероятность осадков: {forecast_data.day.daily_chance_of_rain if forecast_data.day.avgtemp_c > 0 else forecast_data.day.daily_chance_of_snow}%\n"
-                    f"{weather_condition(precipitation.text)}")
-
-                bot.send_message(message.chat.id, forecast_msg)
-            print(f"several forecast : Данные успешно обработаны")
-            return
-
-        elif response.status_code == 400:
-            error_code = data['error']['code']
-            if error_code == 1006:
-                bot.send_message(message.chat.id, "Город не найден, проверьте правильность названия города")
-                print("Город не найден Response 400: code 1006")
-            elif error_code == 9999:
-                bot.send_message(message.chat.id, "Сервер временно недоступен, попробуйте позже")
-                print("Сервер временно недоступен Response 400: code 9999")
-            elif error_code == 1005:
-                print("URL-адрес запроса API недействителен. Response 400: code 1005")
-            else:
-                print("Неизвестная ошибка Response 400")
-                bot.send_message(message.chat.id, "Неизвестная ошибка")
-        elif response.status_code == 403:
-            print(f"Response 403: {data['error']['message']}")
-            bot.send_message(message.chat.id,
-                             "Произошла техническая ошибка, попробуйте позже или обратитесь в поддержку")
+        if qty_days >= 1 and qty_days <= 10:
+            qty_days += 1
         else:
-            print(f"Response {response.status_code}: {data['error']['message']}")
-            bot.send_message(message.chat.id, "Ошибка получения данных о погоде, попробуйте позже")
-            print("Произошла ошибка")
+            bot.send_message(message.chat.id, 'Количество дней должно быть от 1 до 10')
     except ValueError:
-        #  TODO: Which case is handled here?
-        bot.send_message(message.chat.id, 'Неправильный ввод, попробуйте ещё раз')
+        bot.send_message(message.chat.id, 'Неверный формат ввода')
+        return
 
-    except ValidationError as e:
-        #  TODO: 'ValueError', superclass of the exception class 'ValidationError', has already been caught
-        print(f"Ошибка валидации данных: {e}")
+    url_forecast_several = f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={cityy}&days={qty_days}&aqi=no&alerts=no'
+    try:
+        print(qty_days)
+        data = get_response(message, url_forecast_several)
+        weather_data = WeatherData.parse_obj(data)
+        current_weather = weather_data.current
+        location = weather_data.location
 
+        for day_num in range(1, len(data['forecast']['forecastday'])):
+            precipitation = Condition.parse_obj(data['forecast']['forecastday'][day_num]['day']['condition'])
+            print(precipitation.text)
+            forecast_data = ForecastForecastDay.parse_obj(data['forecast']['forecastday'][day_num])
+            forecast_msg = (
+                f"Прогноз на {forecast_data.date}\n"
+                f"{location.name} ({location.region}):\n"
+                f"Максимальная температура: {forecast_data.day.maxtemp_c}°C\n"
+                f"Минимальная температура: {forecast_data.day.mintemp_c}°C\n"
+                f"{wind(current_weather.wind_dir, current_weather.wind_kph, forecast_data.day.maxwind_kph)}\n"
+                f"Влажность {forecast_data.day.avghumidity}% \n"
+                f"Вероятность осадков: {forecast_data.day.daily_chance_of_rain if forecast_data.day.avgtemp_c > 0 else forecast_data.day.daily_chance_of_snow}%\n"
+                f"{weather_condition(precipitation.text)}")
+
+            bot.send_message(message.chat.id, forecast_msg)
+            print(f"several forecast : Данные успешно обработаны")
     except Exception as e:
-        bot.send_message(message.chat.id, f"Произошла ошибка:")
+        bot.send_message(message.chat.id, f"Произошла ошибка")
         print(e)
-    return "Произошла ошибка"
+        print(f"several forecast : Ошибка при обработке данных")
+    return
 
 
 @bot.message_handler(commands=['wheather_statistic'])
 def statistic(message):
-    for days in range(7):
-        statistic_date = today_date - timedelta(days=days)
-
-        response = requests.get(
-            f'https://api.weatherapi.com/v1/history.json?key={API_KEY_weather}&q={cityy}&dt={statistic_date}'
-        )
-        data = json.loads(response.text)
-        if response.status_code == 200:
-            # day_detailss = data['forecast']['forecastday'][0]['day']
+    try:
+        for days in range(7):
+            statistic_date = today_date - timedelta(days=days)
+            url_statistic = f'https://api.weatherapi.com/v1/history.json?key={API_KEY_weather}&q={cityy}&dt={statistic_date}'
+            data = get_response(message, url_statistic)
+            day_detailss = data['forecast']['forecastday'][0]['day']
             day_details = DayDetails.parse_obj(data['forecast']['forecastday'][0]['day'])
             day_details_data = data['forecast']['forecastday'][0]['date']
             precipitation = Condition.parse_obj(data['forecast']['forecastday'][0]['day']['condition'])
@@ -365,16 +304,11 @@ def statistic(message):
 
             bot.send_message(message.chat.id, msg_statistic)
             print(f"statistic : Данные успешно обработаны")
-        else:
-            error_code = data['error']['code']
-            if error_code == 1006:
-                bot.send_message(message.chat.id, "Город не найден, проверьте правильность названия города")
-            elif error_code == 9999:
-                bot.send_message(message.chat.id, "Сервер временно недоступен, попробуйте позже")
-            elif error_code == 1005:
-                print("Недействительный URL запроса API. Ошибка 400: код 1005")
-            else:
-                bot.send_message(message.chat.id, "Неизвестная ошибка")
+
+    except Exception as e:
+        bot.send_message(message.chat.id, f"Произошла ошибка")
+        print(e)
+        print(f"statistic : Ошибка при обработке данных")
 
 
 bot.infinity_polling()
