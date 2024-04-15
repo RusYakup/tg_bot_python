@@ -191,6 +191,9 @@ def get_weather_forecast(message):
     except Exception as e:
         bot.send_message(message.chat.id, f"Произошла ошибка")
         py_loger.error(f"weather_forecast: Ошибка при обработке данных {e}")
+    except ValidationError as e:
+        bot.send_message(message.chat.id, f"Произошла ошибка при обработке данных")
+        py_loger.error(f"weather_forecast: Неверные данные {e}")
 
 
 @bot.message_handler(commands=['forecast_for_several_days'])
