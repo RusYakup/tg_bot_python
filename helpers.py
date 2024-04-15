@@ -1,3 +1,32 @@
+import json
+import requests
+import telebot
+import logging
+
+
+def check_bot_token(token):
+    url = f"https://api.telegram.org/bot{token}/getMe"
+    response = requests.get(url)
+    info = response.json()
+
+    if response.status_code == 200:
+        logging.info("Token tg bot verified: " + info['result']['username'])
+        return True
+    else:
+        logging.error("Token tg bot not verified")
+        return False
+
+
+def check_api_key(api_key):
+    response = requests.get(f'http://api.weatherapi.com/v1/current.json?key={api_key}&q=Kazan')
+    if response.status_code == 200:
+        logging.info("The API key is correct.")
+        return True
+    else:
+        logging.error("The API key is incorrect.")
+        return False
+
+
 def wind(win_dir: str, wind_kph: float, max_wind_kph: float) -> str:
     """
         1) translates wind direction from English to Russian
@@ -32,13 +61,14 @@ def wind(win_dir: str, wind_kph: float, max_wind_kph: float) -> str:
     if win_dir in direction:
         return f"Ветер {direction[win_dir]} {wind_ms}м/с (с порывами до {max_wind_ms} м/с)"
     else:
+        logging.debug("Wind direction is unknown.")
         return "Направление ветра неизвестно"
 
 
 def weather_condition(precipitation: str) -> str:
     weather_dict = {
         "Sunny": "Солнечно",
-        "Partly Cloudy": "Переменная облачность",
+        "Partly cloudy": "Переменная облачность",
         "Cloudy": "Облачно",
         "Overcast": "Пасмурная погода",
         "Mist": "Туман",
@@ -87,7 +117,40 @@ def weather_condition(precipitation: str) -> str:
         "Moderate or heavy snow with thunder": "Умеренный или сильный снег с грозой",
         "Patchy rain nearby": "Возможен кратковременный дождь",
     }
-    if precipitation in weather_dict:
+    if precipitation.capitalize() in weather_dict:
         return weather_dict[precipitation]
     else:
+        logging.error(f"Unknown precipitation: {precipitation}")
         return precipitation
+
+
+def get_response(message, api_url: str, bot: telebot.TeleBot) -> json:
+    try:
+        response = requests.get(api_url)
+        data = json.loads(response.text)
+        if response.status_code == 200:
+            logging.debug(f"Response 200")
+            return json.loads(response.text)
+        elif response.status_code == 400:
+            error_code = data['error']['code']
+            if error_code == 1006:
+                bot.send_message(message.chat.id, "Город не найден, проверьте правильность названия города")
+                logging.error("Город не найден Response 400: code 1006")
+                exit(1)
+            elif error_code == 9999:
+                bot.send_message("Сервер временно недоступен, попробуйте позже")
+                logging.error("Сервер временно недоступен Response 400: code 9999")
+            elif error_code == 1005:
+                logging.error("URL-адрес запроса API недействителен. Response 400: code 1005")
+            else:
+                logging.error("Неизвестная ошибка Response 400")
+                bot.send_message("Неизвестная ошибка")
+        elif response.status_code == 403:
+            logging.error(f"Response 403: {data['error']['message']}")
+            bot.send_message("Произошла техническая ошибка, попробуйте позже или обратитесь в поддержку")
+        else:
+            logging.error(f"Response {response.status_code}: {data['error']['message']}")
+            bot.send_message("Ошибка получения данных о погоде, попробуйте позже")
+    except Exception as e:
+        bot.send_message(message.chat.id, f"Произошла ошибка")
+        logging.error(e)
