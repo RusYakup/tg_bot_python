@@ -1,0 +1,43 @@
+version: "3.5"
+
+# [ extension definition ]
+x-localtime: &host_localtime
+  type: bind
+  source: /etc/localtime
+  target: /etc/localtime
+  read_only: true
+
+
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      tag: "{{.Name}}"
+      max-size: ${LOG_MAX_SIZE:-5m}
+      max-file: ${LOG_MAX_FILE:-1}
+
+
+# [ container definition ]
+services:
+  ngrok:
+    image: ngrok/ngrok:latest
+    <<: *logging
+    restart: always
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN:?err}
+    command: http --domain=${NGROK_DOMAIN:?err} 8888
+    network_mode: host
+
+
+# TODO: bot service will be added here
+
+
+# [ networks definition ]
+networks:
+  internal:
+    name: bot_internal
+    driver: bridge
+    internal: true
+  external:
+    name: bot_external
+    driver: bridge
