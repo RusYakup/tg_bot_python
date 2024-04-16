@@ -1,9 +1,8 @@
 import os
-import sys
 import telebot
 import logging
 from dotenv import load_dotenv, find_dotenv
-from helpers import wind, get_response, weather_condition, check_bot_token, check_api_key
+from helpers import wind, get_response, weather_condition, check_bot_token, check_api_key, logging_config
 from models import *
 from pydantic import ValidationError
 from datetime import date, datetime, timedelta
@@ -11,14 +10,8 @@ from datetime import date, datetime, timedelta
 # TODO: Need to use logging library to print logs. Log level must be adjustable via env variables. Detail logs needed
 #  for debugging should use with debug log level. Logs that used to make clearly what is going on in the app,
 #  can use info log level.
-py_loger = logging.getLogger()
-py_loger.setLevel(logging.INFO)
-handler = logging.StreamHandler(sys.stdout)
-handler.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-py_loger.addHandler(handler)
 
+loger = logging_config()
 load_dotenv(find_dotenv())
 
 TOKEN = os.environ['TOKEN']
@@ -38,7 +31,7 @@ city = "Moskva"  # default city to the bot.
 
 @bot.message_handler(commands=['start'])
 def start_message(message):
-    py_loger.info("Пользователь запустил бота")
+    loger.info("Пользователь запустил бота")
     kb_reply = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
 
     btn1 = telebot.types.KeyboardButton(text="Определить местоположение",
@@ -67,7 +60,7 @@ def get_coordinates(message):
     latitude, longitude = message.location.latitude, message.location.longitude
     local = f'{latitude},{longitude}'
     city = local
-    py_loger.debug(f"Пользователь выбрал город по локации: {city}")
+    loger.debug(f"Пользователь выбрал город по локации: {city}")
     weather(message)
 
 
@@ -82,14 +75,14 @@ def add_city(message):
     city_user = message.text
     global city
     city = city_user
-    py_loger.info(f"Пользователь сменил город: {city}")
+    loger.info(f"Пользователь сменил город: {city}")
 
     weather(message)
 
 
 @bot.message_handler(commands=['help'])
 def help_message(message):
-    py_loger.info("Пользователь запросил помощь")
+    loger.info("Пользователь запросил помощь")
     help_messages = (
         ('help', 'помощь'),
         ('change_city', 'изменить город'),
@@ -106,7 +99,7 @@ def help_message(message):
 
 @bot.message_handler(commands=['current_weather'])
 def weather(message):
-    py_loger.info(f"Пользователь запросил погоду сегодня: {city}")
+    loger.info(f"Пользователь запросил погоду сегодня: {city}")
     url_current = f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={city}'
     try:
 
@@ -126,12 +119,12 @@ def weather(message):
             f"Веротность осадков: {forecast.daily_chance_of_rain if current_weather.temp_c > 0 else forecast.daily_chance_of_snow}%\n"
             f"{weather_condition(precipitation.text)}")
         bot.send_message(message.chat.id, current_msg)
-        return py_loger.info("current_weather: Данные успешно обработаны")
+        return loger.info("current_weather: Данные успешно обработаны")
     except Exception as e:
-        py_loger.error(f"Произошла ошибка при выполнении запроса: {e}")
+        loger.error(f"Произошла ошибка при выполнении запроса: {e}")
         bot.send_message(message.chat.id, f"Произошла ошибка при выполнении запроса")
     except ValidationError as e:
-        py_loger.error(f"Неверные данные: {e}")
+        loger.error(f"Неверные данные: {e}")
 
 
 date_difference = []  # list of days between today and specific date for weather forecast
@@ -158,16 +151,16 @@ def add_day(message):
         else:
             max_date = today_date + timedelta(days=10)
             bot.send_message(message.chat.id, f'Введенная дата должна быть не дальше {max_date}.')
-            py_loger.debug("add_day: Введенная дата должна быть не дальше {max_date}.")
+            loger.debug("add_day: Введенная дата должна быть не дальше {max_date}.")
             return
     except ValueError:
         bot.send_message(message.chat.id, "Неверный формат даты. Введите дату в формате ГГГГ-ММ-ДД")
-        py_loger.debug("add_day: Неверный формат даты")
-    py_loger.info(f"Пользователь ввел дату (weather_forecast): {message.text}")
+        loger.debug("add_day: Неверный формат даты")
+    loger.info(f"Пользователь ввел дату (weather_forecast): {message.text}")
 
 
 def get_weather_forecast(message):
-    py_loger.info(f"Пользователь запросил прогноз на {date_difference[0]} дней: {city}")
+    loger.info(f"Пользователь запросил прогноз на {date_difference[0]} дней: {city}")
     url_forecast = f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={city}&days={date_difference[0]}&aqi=no&alerts=no'
     try:
         data = get_response(message, url_forecast, bot)
@@ -187,13 +180,13 @@ def get_weather_forecast(message):
             f"Веротность осадков: {forecast_data.day.daily_chance_of_rain if forecast_data.day.avgtemp_c > 0 else forecast_data.day.daily_chance_of_snow}%\n"
             f"{weather_condition(precipitation.text)}")
         bot.send_message(message.chat.id, forecast_weather_msg)
-        py_loger.info(f"weather_forecast: Данные успешно обработаны")
+        loger.info(f"weather_forecast: Данные успешно обработаны")
     except Exception as e:
         bot.send_message(message.chat.id, f"Произошла ошибка")
-        py_loger.error(f"weather_forecast: Ошибка при обработке данных {e}")
+        loger.error(f"weather_forecast: Ошибка при обработке данных {e}")
     except ValidationError as e:
         bot.send_message(message.chat.id, f"Произошла ошибка при обработке данных")
-        py_loger.error(f"weather_forecast: Неверные данные {e}")
+        loger.error(f"weather_forecast: Неверные данные {e}")
 
 
 @bot.message_handler(commands=['forecast_for_several_days'])
@@ -207,14 +200,14 @@ def forecast_for_several_days(message):
 def get_forecast_several(message):
     try:
         qty_days = int(message.text)
-        py_loger.info(f"Пользователь запросил прогноз на {qty_days} дней: {city}")
+        loger.info(f"Пользователь запросил прогноз на {qty_days} дней: {city}")
         if qty_days >= 1 and qty_days <= 10:
             qty_days += 1
         else:
             bot.send_message(message.chat.id, 'Количество дней должно быть от 1 до 10')
     except ValueError:
         bot.send_message(message.chat.id, 'Неверный формат ввода')
-        py_loger.debug("forecast_for_several_days: Неверный формат ввода")
+        loger.debug("forecast_for_several_days: Неверный формат ввода")
         return
 
     url_forecast_several = f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={city}&days={qty_days}&aqi=no&alerts=no'
@@ -239,19 +232,19 @@ def get_forecast_several(message):
                 f"{weather_condition(precipitation.text)}")
 
             bot.send_message(message.chat.id, forecast_msg)
-        py_loger.info(f"several forecast : Данные успешно обработаны")
+        loger.info(f"several forecast : Данные успешно обработаны")
     except Exception as e:
         bot.send_message(message.chat.id, f"Произошла ошибка")
-        py_loger.error(f"several forecast : Ошибка при обработке данных {e}")
+        loger.error(f"several forecast : Ошибка при обработке данных {e}")
     except ValidationError as e:
-        py_loger.error(e)
+        loger.error(e)
     return
 
 
 @bot.message_handler(commands=['weather_statistic'])
 def statistic(message):
     try:
-        py_loger.info(f"Пользователь запросил статистику: {city}")
+        loger.info(f"Пользователь запросил статистику: {city}")
         for days in range(7):
             statistic_date = today_date - timedelta(days=days)
             url_statistic = f'https://api.weatherapi.com/v1/history.json?key={API_KEY_weather}&q={city}&dt={statistic_date}'
@@ -267,19 +260,19 @@ def statistic(message):
             )
 
             bot.send_message(message.chat.id, msg_statistic)
-        py_loger.info(f"statistic : Данные успешно обработаны")
+        loger.info(f"statistic : Данные успешно обработаны")
 
     except Exception as e:
         bot.send_message(message.chat.id, f"Произошла ошибка")
-        py_loger.error(f"statistic : Ошибка при обработке данных {e}")
+        loger.error(f"statistic : Ошибка при обработке данных {e}")
     except ValidationError as e:
         bot.send_message(message.chat.id, f"Произошла ошибка")
-        py_loger.error(f"statistic : Ошибка валидации {e}")
+        loger.error(f"statistic : Ошибка валидации {e}")
 
 
 @bot.message_handler(commands=['prediction'])
 def prediction(message):
-    py_loger.info(f"Пользователь запросил prediction: {city}")
+    loger.info(f"Пользователь запросил prediction: {city}")
     avgtemp_c_7days = set()
     for days in range(7):
         statistic_date = today_date - timedelta(days=days)
@@ -301,10 +294,10 @@ def prediction(message):
                 avgtemp_c_3days.add(forecast_data.day.avgtemp_c)
         except Exception as e:
             bot.send_message(message.chat.id, f"Произошла ошибка {e}")
-            py_loger.error(f"statistic : Ошибка при обработке данных {e}")
+            loger.error(f"statistic : Ошибка при обработке данных {e}")
         except ValidationError as e:
             bot.send_message(message.chat.id, f"Произошла ошибка")
-            py_loger.error(f"statistic : Ошибка валидации {e}")
+            loger.error(f"statistic : Ошибка валидации {e}")
 
     avgtemp_c_3days = round(sum(avgtemp_c_3days) / len(avgtemp_c_3days))
     try:
@@ -317,14 +310,14 @@ def prediction(message):
         else:
             bot.send_message(message.chat.id,
                              f"Средняя температура в ближайшие 3 дня будет {avgtemp_c_3days}°C, температура сохранилась как в последние 7 дней")
-        py_loger.info(f"statistic : Данные успешно обработаны")
+        loger.info(f"statistic : Данные успешно обработаны")
 
     except ZeroDivisionError as e:
         bot.send_message(message.chat.id, f"Произошла ошибка")
-        py_loger.error(f"statistic : Ошибка при обработке данных {e}")
+        loger.error(f"statistic : Ошибка при обработке данных {e}")
 
     except Exception as e:
-        py_loger.error(f"statistic : Ошибка при обработке данных {e}")
+        loger.error(f"statistic : Ошибка при обработке данных {e}")
 
 
 bot.infinity_polling()

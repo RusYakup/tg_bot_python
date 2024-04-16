@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+
+  weather_bot:
+    build: .
+    volumes:
+      - .:/app
+    ports:
+      - 8080:8080
+    environment:
+      - TOKEN=${TOKEN}
+      - API_KEY=${API_KEY}
+    restart: unless-stopped
+
+    command: python main.py
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+networks:
+  default:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16

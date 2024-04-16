@@ -2,7 +2,7 @@ import json
 import requests
 import telebot
 import logging
-
+import sys
 
 def check_bot_token(token):
     url = f"https://api.telegram.org/bot{token}/getMe"
@@ -154,3 +154,15 @@ def get_response(message, api_url: str, bot: telebot.TeleBot) -> json:
     except Exception as e:
         bot.send_message(message.chat.id, f"Произошла ошибка")
         logging.error(e)
+
+def logging_config():
+    loger = logging.getLogger()
+    loger.setLevel(logging.INFO)
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    loger.addHandler(handler)
+    return loger
+
+
