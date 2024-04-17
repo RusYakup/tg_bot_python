@@ -1,11 +1,9 @@
 version: '3.8'
 
 services:
-
   weather_bot:
     build: .
-    volumes:
-      - .:/app
+    container_name: weather_tg_bot
     ports:
       - 8080:8080
     environment:
@@ -15,31 +13,3 @@ services:
 
     command: python main.py
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-networks:
-  default:
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.28.0.0/16
