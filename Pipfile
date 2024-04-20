@@ -4,12 +4,14 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-aiohttp = "*"
 requests = "*"
 pyTelegramBotAPI = "==4.16.1"
-
+aiohttp = "==3.9.5"
 python-dotenv = "==1.0.1"
 pydantic = "==2.6.4"
+fastapi = "==0.110.1"
+uvicorn = "==0.29.0"
+
 
 [dev-packages]
 coverage = "*"
