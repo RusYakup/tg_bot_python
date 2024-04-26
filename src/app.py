@@ -1,53 +1,68 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from helpers.helpers import check_bot_token, check_api_key
+from helpers.check_values import check_chat_id, check_waiting, handlers
+from handlers.web_hook_handler import set_webhook
+from bot.actions import *
 import asyncio
 import aiohttp
 import json
 import requests
+from helpers.model_message import *
+import os
 from telebot.async_telebot import AsyncTeleBot
-
-bot = AsyncTeleBot('TOKEN')
+from waiting.status_of_values import user_input
 
 app = FastAPI()
+bot = AsyncTeleBot(TOKEN)
+
+
+# @app.post("/")
+# async def tg_webhooks(request: Request):
+#     webhook_data = await request.json()
+#     if request.method == 'POST':
+#         json_string = await request.body()
+#         json_dict = json.loads(json_string.decode())
+#         json_dict['message']['from_user'] = json_dict['message'].pop('from')
+#         print(json_dict)
 
 
 @app.post("/")
-async def handle_message(request: Request):
-    json_data = await request.json()
-    chat_id = json_data.get("chat_id")
-
-    # Check if the incoming message contains text
-    if "text" in json_data:
-        # Check if the text is not empty
-        if json_data["text"]:
-            # Respond with "привет" if the message is not empty
-            await bot.send_message(chat_id, "привет")
-
-
-@app.post("/telegram_dispatcher")
-async def telegram_dispatcher(request: Request):
+async def tg_webhooks(request: Request):
     if request.method == 'POST':
-        json_string = await request.body()
-        json_dict = json.loads(json_string.decode())
+        async with aiohttp.ClientSession():
+            json_string = await request.body()
+            json_dict = json.loads(json_string.decode())
+            print(json_dict)
+            json_dict['message']['from_user'] = json_dict['message'].pop('from')
+            try:
+                message = Message(**json_dict['message'])
 
-        if 'message' in json_dict and 'text' in json_dict['message']:
-            message = json_dict['message']['text']
-            chat_id = json_dict['message']['chat']['id']
+            except ValidationError:
+                print(json_dict['message'])
+            await check_chat_id(message)
 
-            if message == '/start':
-                await bot.send_message(chat_id, 'Привет, я бот. Напиши мне что-нибудь.')
+            user_input_values = user_input.get(message.chat.id, {}).values()
+            if any(value == 'waiting value' for value in user_input_values):
+                await check_waiting(message)
             else:
-                await bot.send_message(chat_id, message)
-
-        async with aiohttp.ClientSession() as session:
-            async with session.post('YOUR_TELEGRAM_BOT_API_URL', json=json_dict) as response:
-                if response.status == 200:
-                    return JSONResponse(content={})
-                else:
-                    return JSONResponse(content={"error": "Failed to process update"}, status_code=response.status)
+                await handlers(bot, message)
 
 
 if __name__ == "__main__":
+    loger = logging_config()
+
+    from dotenv import load_dotenv, find_dotenv
+
+    load_dotenv(find_dotenv())
+    TOKEN = os.environ['TOKEN']
+
+    check_bot_token(TOKEN)
+    API_KEY = os.environ['API_KEY']
+    check_api_key(API_KEY)
+    set_webhook(TOKEN, os.environ['APP_DOMAIN'])
+    loop = asyncio.get_event_loop()
+
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8888)
+

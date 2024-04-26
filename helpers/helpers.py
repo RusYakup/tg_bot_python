@@ -1,49 +1,31 @@
 import json
 import requests
-import telebot
 import logging
 import sys
-import asyncio
-import aiohttp
+from telebot.async_telebot import AsyncTeleBot
 
 
-async def check_bot_token(token):
-    async with aiohttp.ClientSession() as client_session:
-        url = f"https://api.telegram.org/bot{token}/getMe"
-        async with client_session.get(url) as response:
-            if response.status == 200:
-                info = await response.json()
+def check_bot_token(token):
+    url = f"https://api.telegram.org/bot{token}/getMe"
+    response = requests.get(url)
+    info = response.json()
 
-                logging.info("Token tg bot verified: " + info['result']['username'])
-            else:
-                logging.error("Token tg bot not verified")
-                return False
-
-
-# async def check_bot_token(token):
-#     url = f"https://api.telegram.org/bot{token}/getMe"
-#     response = requests.get(url)
-#     info = response.json()
-#
-#     if response.status_code == 200:
-#         logging.info("Token tg bot verified: " + info['result']['username'])
-#         return True
-#     else:
-#         logging.error("Token tg bot not verified")
-#         return False
+    if response.status_code == 200:
+        logging.info("Token tg bot verified: " + info['result']['username'])
+    else:
+        logging.error("Token tg bot not verified")
 
 
 def check_api_key(api_key):
-    response = requests.get(f'http://api.weatherapi.com/v1/current.json?key={api_key}&q=Kazan')
+    url = f'http://api.weatherapi.com/v1/current.json?key={api_key}&q=Kazan'
+    response = requests.get(url)
     if response.status_code == 200:
         logging.info("The API key is correct.")
-        return True
     else:
         logging.error("The API key is incorrect.")
-        return False
 
 
-async def wind(win_dir: str, wind_kph: float, max_wind_kph: float) -> str:
+def wind(win_dir: str, wind_kph: float, max_wind_kph: float) -> str:
     """
         1) translates wind direction from English to Russian
         2) converts wind speed km/h to m/s
@@ -81,7 +63,7 @@ async def wind(win_dir: str, wind_kph: float, max_wind_kph: float) -> str:
         return "Направление ветра неизвестно"
 
 
-async def weather_condition(precipitation: str) -> str:
+def weather_condition(precipitation: str) -> str:
     weather_dict = {
         "Sunny": "Солнечно",
         "Partly cloudy": "Переменная облачность",
@@ -140,96 +122,64 @@ async def weather_condition(precipitation: str) -> str:
         return precipitation
 
 
-async def get_response(message, api_url: str, bot: telebot.TeleBot) -> json:
-    async with aiohttp.ClientSession() as client_session:
-        async with client_session.get(api_url) as response:
-            data = await response.json()
-            print(data)
-            if response.status == 200:
-                logging.debug(f"Response 200")
-                return data
-            elif response.status == 400:
-                error_code = data['error']['code']
-                if error_code == 1006:
-                    bot.send_message(message.chat.id,
-                                       "Город не найден, проверьте правильность названия города")
-                    logging.error("Город не найден Response 400: code 1006")
-                    exit(1)
-                elif error_code == 9999:
-                    bot.send_message(message.chat.id,
-                                       "Сервер временно недоступен, попробуйте позже")
-                    logging.error("Сервер временно недоступен Response 400: code 9999")
-                    exit(1)
-                else:
-                    bot.send_message(message.chat.id,"Произошла ошибка, попробуйте позже")
+def get_response(message, api_url: str, bot: AsyncTeleBot) -> json:
+    try:
+        response = requests.get(api_url)
+        data = json.loads(response.text)
+        if response.status_code == 200:
+            logging.debug(f"Response 200")
+            return json.loads(response.text)
+        elif response.status_code == 400:
+            error_code = data['error']['code']
+            if error_code == 1006:
+                bot.send_message(message.chat.id, "Город не найден, проверьте правильность названия города")
+                logging.error("Город не найден Response 400: code 1006")
+                exit(1)
+            elif error_code == 9999:
+                bot.send_message("Сервер временно недоступен, попробуйте позже")
+                logging.error("Сервер временно недоступен Response 400: code 9999")
+            elif error_code == 1005:
+                logging.error("URL-адрес запроса API недействителен. Response 400: code 1005")
             else:
-                bot.send_message(message.chat.id,"Произошла ошибка, попробуйте позже")
+                logging.error("Неизвестная ошибка Response 400")
+                bot.send_message("Неизвестная ошибка")
+        elif response.status_code == 403:
+            logging.error(f"Response 403: {data['error']['message']}")
+            bot.send_message("Произошла техническая ошибка, попробуйте позже или обратитесь в поддержку")
+        else:
+            logging.error(f"Response {response.status_code}: {data['error']['message']}")
+            bot.send_message("Ошибка получения данных о погоде, попробуйте позже")
+    except Exception as e:
+        bot.send_message(message.chat.id, f"Произошла ошибка")
+        logging.error(e)
 
 
-    #     async with aiohttp.ClientSession() as client_session:
-    #         task = [asyncio.create_task(responce(requests, 'https://httpbin.org/json', status_count))
-    #         async with client_session.get(api_url) as response:
-    #             data = response.json()
-    #             if response.status == 200:
-    #                 logging.debug(f"Response 200")
-    #                 return data
-    #             elif response.status == 400:
-    #                 error_code = data['error']['code']
-    #                 if error_code == 1006:
-    #                     bot.send_message(message.chat.id,
-    #                                            "Город не найден, проверьте правильность названия города")
-    #                     logging.error("Город не найден Response 400: code 1006")
-    #                     exit(1)
-    #                 elif error_code == 9999:
-    #                     bot.send_message("Сервер временно недоступен, попробуйте позже")
-    #                     logging.error("Сервер временно недоступен Response 400: code 9999")
-    #                 elif error_code == 1005:
-    #                     logging.error("URL-адрес запроса API недействителен. Response 400: code 1005")
-    #                 else:
-    #                     logging.error("Неизвестная ошибка Response 400")
-    #             elif response.status == 403:
-    #                 logging.error(f"Response 403: {data['error']['message']}")
-    #                 bot.send_message("Произошла техническая ошибка, попробуйте позже или обратитесь в поддержку")
-    #             else:
-    #                 logging.error(f"Неизвестный статус ответа: {response.status}")
-    #                 bot.send_message("Произошла техническая ошибка, попробуйте позже или обратитесь в поддержку")
-    #
-    # except aiohttp.ClientError as e:
-    #     logging.error(f"Error: {e}")
-    #     bot.send_message("Произошла техническая ошибка, попробуйте позже или обратитесь в поддержку")
-    #
-    #     #####
-    #     response = requests.get(api_url)
-    #     data = json.loads(response.text)
-    #     if response.status_code == 200:
-    #         logging.debug(f"Response 200")
-    #         return json.loads(response.text)
-    #     elif response.status_code == 400:
-    #         error_code = data['error']['code']
-    #         if error_code == 1006:
-    #             bot.send_message(message.chat.id, "Город не найден, проверьте правильность названия города")
-    #             logging.error("Город не найден Response 400: code 1006")
-    #             exit(1)
-    #         elif error_code == 9999:
-    #             bot.send_message("Сервер временно недоступен, попробуйте позже")
-    #             logging.error("Сервер временно недоступен Response 400: code 9999")
-    #         elif error_code == 1005:
-    #             logging.error("URL-адрес запроса API недействителен. Response 400: code 1005")
-    #         else:
-    #             logging.error("Неизвестная ошибка Response 400")
-    #             bot.send_message("Неизвестная ошибка")
-    #     elif response.status_code == 403:
-    #         logging.error(f"Response 403: {data['error']['message']}")
-    #         bot.send_message("Произошла техническая ошибка, попробуйте позже или обратитесь в поддержку")
-    #     else:
-    #         logging.error(f"Response {response.status_code}: {data['error']['message']}")
-    #         bot.send_message("Ошибка получения данных о погоде, попробуйте позже")
-    # except Exception as e:
-    #     bot.send_message(message.chat.id, f"Произошла ошибка")
-    #     logging.error(e)
+# async def get_response(message, api_url: str, bot: AsyncTeleBot) -> json:
+#     try:
+#         async with aiohttp.ClientSession() as session:
+#             async with session.get(api_url) as response:
+#                 data = await response.json()
+#                 if response.status == 200:
+#                     logging.debug(f"Response 200")
+#                     return data
+#                 elif response.status == 400:
+#                     error_code = data['error']['code']
+#                     if error_code == 1006:
+#                         await bot.send_message(message.chat.id, "Город не найден, проверьте правильность названия города")
+#                         logging.error("Город не найден Response 400: code 1006")
+#                         exit(1)
+#                 elif response.status == 403:
+#                     logging.error(f"Response 403: {data['error']['message']}")
+#                     await bot.send_message(message.chat.id, "Произошла техническая ошибка, попробуйте позже или обратитесь в поддержку")
+#                 else:
+#                     logging.error(f"Response {response.status}: {data['error']['message']}")
+#                     await bot.send_message(message.chat.id, "Ошибка получения данных о погоде, попробуйте позже")
+#     except Exception as e:
+#         await bot.send_message(message.chat.id, f"Произошла ошибка")
+#         logging.error(e)
 
 
-async def logging_config():
+def logging_config():
     loger = logging.getLogger()
     loger.setLevel(logging.INFO)
     handler = logging.StreamHandler(sys.stdout)
@@ -237,4 +187,6 @@ async def logging_config():
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
     loger.addHandler(handler)
+    logging.info("Logging Configured")
     return loger
+
