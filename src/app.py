@@ -34,6 +34,7 @@ bot = AsyncTeleBot(TOKEN)
 #  for instance, /tg_webhooks.
 @app.post("/")
 async def tg_webhooks(request: Request):
+    #  TODO: this handler must authorize incoming requests from Telegram via checking of X-Telegram-Bot-Api-Secret-Token header. Read telegram docs
     if request.method == 'POST':
         # TODO: why do you use aiohttp client context manager here?
         async with aiohttp.ClientSession():
