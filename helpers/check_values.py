@@ -8,9 +8,7 @@ async def check_chat_id(message):
         user_input[message.chat.id] = {'city': 'Moskva',
                                        'location': None,
                                        'date_difference': None,
-                                       'qty_days': None,
-                                       'action_waiting_city': None}
-        print(user_input)
+                                       'qty_days': None}
     else:
         pass
 
@@ -23,8 +21,10 @@ async def check_waiting(message):
     #     await get_coordinates(message)
     if user_input[message.chat.id]['date_difference'] == "waiting value":
         await add_day(message)
+        user_input[message.chat.id]['date_difference'] = None
     if user_input[message.chat.id]['qty_days'] == "waiting value":
         await get_forecast_several(message)
+        user_input[message.chat.id]['qty_days'] = None
     else:
         pass
 
@@ -49,4 +49,3 @@ async def handlers(bot, message):
 
     else:
         await bot.send_message(message.chat.id, 'Unknown command. Please try again\n/help')
-

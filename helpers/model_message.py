@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Optional
 
 
 class User(BaseModel):
@@ -14,6 +15,11 @@ class Chat(BaseModel):
     type: str
 
 
+class Location(BaseModel):
+    latitude: float
+    longitude: float
+
+
 # class Entity(BaseModel):
 #     offset: int
 #     length: int
@@ -25,6 +31,8 @@ class Message(BaseModel):
     chat: Chat
     date: int
     text: str
+    location: Optional[Location] = None
+
 
 #
 #

@@ -79,4 +79,3 @@ class Locations(BaseModel):
 
 class StatisticsWeather(BaseModel):
     Location: Locations
-    forecast: dict

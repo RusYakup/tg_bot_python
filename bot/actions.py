@@ -21,13 +21,14 @@ bot = AsyncTeleBot(os.environ['TOKEN'])
 API_KEY_weather = (os.environ['API_KEY'])
 
 
+
 @bot.message_handler(commands=['start'])
 async def start_message(message):
     loger.info("User %s started bot", message.from_user.first_name)
     kb_reply = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
-    btn1 = telebot.types.KeyboardButton(text="Location",
-                                        request_location=True)
-    kb_reply.add(btn1)
+    # btn1 = telebot.types.KeyboardButton(text="Location",
+    #                                     request_location=True)
+    # kb_reply.add(btn1)
     msg = (
         f'Hello {message.from_user.first_name}! I am WeatherForecastBot, your personal assistant for getting an accurate'
         f' weather forecast. I can provide you with weather information for any city. Just type the name of the city '
@@ -41,7 +42,7 @@ async def start_message(message):
         f'/weather_statistics - weather statistics for the last 7 days\n'
         f'/prediction - prediction of the average temperature for 3 days\n'
         f'or simply press the menu to display all commands \n')
-    await bot.send_message(message.chat.id, msg, reply_markup=kb_reply)
+    await bot.send_message(message.chat.id, msg)###, reply_markup=kb_reply###
     user_input[message.chat.id] = {'city': None, 'location': None, 'date_difference': None, 'qty_days': None}
 
 
@@ -65,7 +66,6 @@ async def add_city(message):
     loger.debug("verify city")
     url = f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={message.text}'
     response = requests.get(url)
-    print(user_input)
     if response.status_code == 200:
         user_input[message.chat.id]['city'] = message.text
         loger.debug(f"User {message.chat.id} added new city: {message.text}")
@@ -76,7 +76,7 @@ async def add_city(message):
 
 @bot.message_handler(commands=['help'])
 async def help_message(message):
-    loger.info("User %s requested help")
+    loger.debug("User requested help")
     help_messages = (
         ('help', 'help'),
         ('change_city', 'change city'),
@@ -93,7 +93,7 @@ async def help_message(message):
 
 @bot.message_handler(commands=['current_weather'])
 async def weather(message):
-    loger.info(f"User requested current weather for': {user_input[message.chat.id]['city']}")
+    loger.debug(f"User requested current weather for': {user_input[message.chat.id]['city']}")
     url_current = f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={user_input[message.chat.id]["city"]}'
     print(url_current)
     try:
@@ -117,17 +117,13 @@ async def weather(message):
         return loger.info("current_weather: Success")
     except Exception as e:
         loger.error(f"Error: {e}")
-        await bot.send_message(message.chat.id, f"Error: {e}")
+        await bot.send_message(message.chat.id, f"Error")
     except ValidationError as e:
         loger.error(f"Data validation error {e}")
 
 
-#
 today_date = date.today()
 
-
-#
-#
 @bot.message_handler(commands=['weather_forecast'])
 async def weather_forecast(message):
     max_date = today_date + timedelta(days=10)
@@ -136,8 +132,6 @@ async def weather_forecast(message):
     user_input[message.chat.id]['date_difference'] = 'waiting value'
     loger.debug(f" User {message.chat.id} waiting value: city")
 
-
-#
 
 async def add_day(message):
     try:
@@ -157,16 +151,15 @@ async def add_day(message):
     loger.debug(f"User input (weather_forecast): {message.text}")
 
 
-#
 async def get_weather_forecast(message):
-    loger.info(
+    loger.debug(
         f"User requested weather forecast {user_input[message.chat.id]['date_difference']} дней: {user_input[message.chat.id]['city']}")
     url_forecast = f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={user_input[message.chat.id]["city"]}&days={user_input[message.chat.id]["date_difference"]}&aqi=no&alerts=no'
     try:
         data = get_response(message, url_forecast, bot)
         weather_data = WeatherData.parse_obj(data)
         current_weather = weather_data.current
-        correction_num = int(user_input[message.chat.id]['date_difference']) - 1
+        correction_num = int(user_input[message.chat.id]['date_difference']) - 2
         forecast_data = ForecastForecastDay.parse_obj(data['forecast']['forecastday'][correction_num])
         location = weather_data.location
         precipitation = Condition.parse_obj(data['forecast']['forecastday'][0]['day']['condition'])
@@ -190,8 +183,6 @@ async def get_weather_forecast(message):
         loger.error(f"weather_forecast: Validation error {e}")
 
 
-#
-#
 @bot.message_handler(commands=['forecast_for_several_days'])
 async def forecast_for_several_days(message):
     await bot.send_message(message.chat.id,
@@ -203,7 +194,7 @@ async def forecast_for_several_days(message):
 async def get_forecast_several(message):
     try:
         qty_days = int(message.text)
-        loger.info(f"User requested weather forecast {qty_days} days: {user_input[message.chat.id]['city']}")
+        loger.debug(f"User requested weather forecast {qty_days} days: {user_input[message.chat.id]['city']}")
         if 1 <= qty_days <= 10:
             qty_days += 1
         else:
@@ -215,10 +206,15 @@ async def get_forecast_several(message):
 
     url_forecast_several = f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={user_input[message.chat.id]["city"]}&days={qty_days}&aqi=no&alerts=no'
     try:
+        print("тут прошли1")
         data = get_response(message, url_forecast_several, bot)
+        print("тут прошли2")
         weather_data = WeatherData.parse_obj(data)
+        print("тут прошли3")
         current_weather = weather_data.current
+        print("тут прошли4")
         location = weather_data.location
+        print("тут прошли")
 
         for day_num in range(1, len(data['forecast']['forecastday'])):
             precipitation = Condition.parse_obj(data['forecast']['forecastday'][day_num]['day']['condition'])
@@ -246,12 +242,13 @@ async def get_forecast_several(message):
 @bot.message_handler(commands=['weather_statistic'])
 async def statistic(message):
     try:
-        loger.info(f"User requested weather statistic: {user_input[message.chat.id]['city']}")
-        for days in range(7):
+        loger.debug(f"User requested weather statistic: {user_input[message.chat.id]['city']}")
+        for days in range(2,9):
             statistic_date = today_date - timedelta(days=days)
             url_statistic = f'https://api.weatherapi.com/v1/history.json?key={API_KEY_weather}&q={user_input[message.chat.id]["city"]}&dt={statistic_date}'
             data = get_response(message, url_statistic, bot)
             day_details = DayDetails.parse_obj(data['forecast']['forecastday'][0]['day'])
+            print(day_details)
             day_details_data = data['forecast']['forecastday'][0]['date']
             precipitation = Condition.parse_obj(data['forecast']['forecastday'][0]['day']['condition'])
 
@@ -273,9 +270,9 @@ async def statistic(message):
 
 @bot.message_handler(commands=['prediction'])
 async def prediction(message):
-    loger.info(f"User requested weather prediction: {user_input[message.chat.id]['city']}")
+    loger.debug(f"User requested weather prediction: {user_input[message.chat.id]['city']}")
     avgtemp_c_7days = set()
-    for days in range(7):
+    for days in range(2,9):
         statistic_date = today_date - timedelta(days=days)
         url_prediction = f'https://api.weatherapi.com/v1/history.json?key={API_KEY_weather}&q={user_input[message.chat.id]["city"]}&dt={statistic_date}'
         data = get_response(message, url_prediction, bot)
@@ -284,10 +281,11 @@ async def prediction(message):
     avgtemp_c_7days = round(sum(avgtemp_c_7days) / len(avgtemp_c_7days))
     avgtemp_c_3days = set()
     for days in range(3):
-        url_forecast_several = f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={user_input}&days=3&aqi=no&alerts=no'
+        url_forecast_several = f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={user_input[message.chat.id]["city"]}&days=3&aqi=no&alerts=no'
         try:
             data = get_response(message, url_forecast_several, bot)
             for day_num in range(1, len(data['forecast']['forecastday'])):
+
                 forecast_data = ForecastForecastDay.parse_obj(data['forecast']['forecastday'][day_num])
                 avgtemp_c_3days.add(forecast_data.day.avgtemp_c)
         except Exception as e:

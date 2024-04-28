@@ -57,10 +57,10 @@ def wind(win_dir: str, wind_kph: float, max_wind_kph: float) -> str:
     wind_ms = round(wind_kph / 3.6)
     max_wind_ms = round(max_wind_kph / 3.6)
     if win_dir in direction:
-        return f"Ветер {direction[win_dir]} {wind_ms}м/с (с порывами до {max_wind_ms} м/с)"
+        return f"Wind {direction[win_dir]} {wind_ms} m/s (with maximum wind speed of {max_wind_ms} m/s)"
     else:
         logging.debug("Wind direction is unknown.")
-        return "Направление ветра неизвестно"
+        return "Wind direction is unknown."
 
 
 def weather_condition(precipitation: str) -> str:
@@ -181,12 +181,11 @@ def get_response(message, api_url: str, bot: AsyncTeleBot) -> json:
 
 def logging_config():
     loger = logging.getLogger()
-    loger.setLevel(logging.INFO)
+    loger.setLevel(logging.DEBUG)
     handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(logging.INFO)
+    handler.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
     loger.addHandler(handler)
     logging.info("Logging Configured")
     return loger
-
