@@ -10,6 +10,7 @@ async def check_chat_id(message):
                                        'date_difference': None,
                                        'qty_days': None}
     else:
+        # TODO: not functional part of code
         pass
 
 
@@ -26,6 +27,7 @@ async def check_waiting(message):
         await get_forecast_several(message)
         user_input[message.chat.id]['qty_days'] = None
     else:
+        # TODO: not functional part of code
         pass
 
 

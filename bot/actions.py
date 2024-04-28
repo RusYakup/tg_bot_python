@@ -13,9 +13,13 @@ from datetime import datetime, date, timedelta
 #  for debugging should use with debug log level. Logs that used to make clearly what is going on in the app,
 #  can use info log level.
 
+# TODO: configuring of logger must be done only one time during initialization of application.
+#  In each module need to use logger = logging.getLogger(__name__) construction that create logger instance with module name.
 loger = logging_config()
 load_dotenv(find_dotenv())
 
+# TODO: don't re-read the same env variable several times. Need to build config of application only one time during startup
+#  Then, all parts of application must use this config. Review how should do it here: https://fastapi.tiangolo.com/advanced/settings/#settings-and-environment-variables
 TOKEN = os.environ['TOKEN']
 bot = AsyncTeleBot(os.environ['TOKEN'])
 API_KEY_weather = (os.environ['API_KEY'])
@@ -42,6 +46,9 @@ async def start_message(message):
         f'/weather_statistics - weather statistics for the last 7 days\n'
         f'/prediction - prediction of the average temperature for 3 days\n'
         f'or simply press the menu to display all commands \n')
+    # TODO: should use try except for bot.send_message and print error log with traceback if exception happens.
+    #  In other actions handler also need to use try except to catch errors and avoid non transparent errors and
+    #  behaviour
     await bot.send_message(message.chat.id, msg)###, reply_markup=kb_reply###
     user_input[message.chat.id] = {'city': None, 'location': None, 'date_difference': None, 'qty_days': None}
 
@@ -65,6 +72,8 @@ async def change_city(message):
 async def add_city(message):
     loger.debug("verify city")
     url = f'http://api.weatherapi.com/v1/forecast.json?key={API_KEY_weather}&q={message.text}'
+    # TODO: It's IO operation. Need to use async code to avoid blocking of the main thread
+    #  Try except also
     response = requests.get(url)
     if response.status_code == 200:
         user_input[message.chat.id]['city'] = message.text
@@ -121,7 +130,7 @@ async def weather(message):
     except ValidationError as e:
         loger.error(f"Data validation error {e}")
 
-
+# TODO: this variable declares during import the module. If the app works more than one day, all functions that use this variable will work with wrong date for the current day!
 today_date = date.today()
 
 @bot.message_handler(commands=['weather_forecast'])
@@ -219,6 +228,7 @@ async def get_forecast_several(message):
         for day_num in range(1, len(data['forecast']['forecastday'])):
             precipitation = Condition.parse_obj(data['forecast']['forecastday'][day_num]['day']['condition'])
             forecast_data = ForecastForecastDay.parse_obj(data['forecast']['forecastday'][day_num])
+            # TODO: Duplication of code
             forecast_msg = (
                 f"Weather forecast for {forecast_data.date}\n"
                 f"{location.name} ({location.region}):\n"
@@ -244,6 +254,7 @@ async def statistic(message):
     try:
         loger.debug(f"User requested weather statistic: {user_input[message.chat.id]['city']}")
         for days in range(2,9):
+            #  TODO: duplication of code
             statistic_date = today_date - timedelta(days=days)
             url_statistic = f'https://api.weatherapi.com/v1/history.json?key={API_KEY_weather}&q={user_input[message.chat.id]["city"]}&dt={statistic_date}'
             data = get_response(message, url_statistic, bot)

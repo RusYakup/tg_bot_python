@@ -180,12 +180,14 @@ def get_response(message, api_url: str, bot: AsyncTeleBot) -> json:
 
 
 def logging_config():
+    # TODO: Need to do log level of logger configurable -> configure log level according to value from env variable.
+    #  Validate configured log level. If value is not passed or is not correct, use DEBUG level as default
     loger = logging.getLogger()
     loger.setLevel(logging.DEBUG)
     handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(logging.DEBUG)
+    handler.setLevel(logging.DEBUG)  # TODO: why do you configure log level 2 times?
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
     loger.addHandler(handler)
     logging.info("Logging Configured")
-    return loger
+    return loger # TODO: You are not needed to return logger here. You can use it in other functions
