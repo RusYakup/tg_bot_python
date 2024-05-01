@@ -9,9 +9,7 @@ async def check_chat_id(message):
                                        'location': None,
                                        'date_difference': None,
                                        'qty_days': None}
-    else:
-        # TODO: not functional part of code
-        pass
+
 
 
 async def check_waiting(message):
@@ -26,9 +24,7 @@ async def check_waiting(message):
     if user_input[message.chat.id]['qty_days'] == "waiting value":
         await get_forecast_several(message)
         user_input[message.chat.id]['qty_days'] = None
-    else:
-        # TODO: not functional part of code
-        pass
+
 
 
 async def handlers(bot, message):

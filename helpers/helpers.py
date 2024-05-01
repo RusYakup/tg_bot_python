@@ -1,8 +1,14 @@
 import json
 import requests
-import logging
 import sys
 from telebot.async_telebot import AsyncTeleBot
+import logging
+import os
+from dotenv import load_dotenv
+import traceback
+import aiohttp
+log = logging.getLogger(__name__)
+
 
 
 def check_bot_token(token):
@@ -11,18 +17,20 @@ def check_bot_token(token):
     info = response.json()
 
     if response.status_code == 200:
-        logging.info("Token tg bot verified: " + info['result']['username'])
+        log.info("Token tg bot verified: " + info['result']['username'])
     else:
-        logging.error("Token tg bot not verified")
+        log.error("Token tg bot not verified")
+        sys.exit(1)
 
 
 def check_api_key(api_key):
     url = f'http://api.weatherapi.com/v1/current.json?key={api_key}&q=Kazan'
     response = requests.get(url)
     if response.status_code == 200:
-        logging.info("The API key is correct.")
+        log.info("The API key is correct.")
     else:
-        logging.error("The API key is incorrect.")
+        log.error("The API key is incorrect.")
+        sys.exit(1)
 
 
 def wind(win_dir: str, wind_kph: float, max_wind_kph: float) -> str:
@@ -57,9 +65,9 @@ def wind(win_dir: str, wind_kph: float, max_wind_kph: float) -> str:
     wind_ms = round(wind_kph / 3.6)
     max_wind_ms = round(max_wind_kph / 3.6)
     if win_dir in direction:
-        return f"Wind {direction[win_dir]} {wind_ms} m/s (with maximum wind speed of {max_wind_ms} m/s)"
+        return f"Wind {win_dir} {wind_ms} m/s (with maximum wind speed of {max_wind_ms} m/s)"
     else:
-        logging.debug("Wind direction is unknown.")
+        log.debug("Wind direction is unknown.")
         return "Wind direction is unknown."
 
 
@@ -118,7 +126,7 @@ def weather_condition(precipitation: str) -> str:
     if precipitation.capitalize() in weather_dict:
         return weather_dict[precipitation]
     else:
-        logging.error(f"Unknown precipitation: {precipitation}")
+        log.error(f"Unknown precipitation: {precipitation}")
         return precipitation
 
 
@@ -152,6 +160,7 @@ def get_response(message, api_url: str, bot: AsyncTeleBot) -> json:
     except Exception as e:
         bot.send_message(message.chat.id, f"Произошла ошибка")
         logging.error(e)
+        logging.error(traceback.format_exc())
 
 
 # async def get_response(message, api_url: str, bot: AsyncTeleBot) -> json:
@@ -160,34 +169,38 @@ def get_response(message, api_url: str, bot: AsyncTeleBot) -> json:
 #             async with session.get(api_url) as response:
 #                 data = await response.json()
 #                 if response.status == 200:
-#                     logging.debug(f"Response 200")
+#                     log.debug(f"Response 200")
 #                     return data
 #                 elif response.status == 400:
 #                     error_code = data['error']['code']
 #                     if error_code == 1006:
 #                         await bot.send_message(message.chat.id, "Город не найден, проверьте правильность названия города")
-#                         logging.error("Город не найден Response 400: code 1006")
-#                         exit(1)
+#                         log.error("Город не найден Response 400: code 1006")
 #                 elif response.status == 403:
-#                     logging.error(f"Response 403: {data['error']['message']}")
+#                     log.error(f"Response 403: {data['error']['message']}")
 #                     await bot.send_message(message.chat.id, "Произошла техническая ошибка, попробуйте позже или обратитесь в поддержку")
 #                 else:
-#                     logging.error(f"Response {response.status}: {data['error']['message']}")
+#                     log.error(f"Response {response.status}: {data['error']['message']}")
 #                     await bot.send_message(message.chat.id, "Ошибка получения данных о погоде, попробуйте позже")
 #     except Exception as e:
 #         await bot.send_message(message.chat.id, f"Произошла ошибка")
-#         logging.error(e)
+#         log.error(e)
 
 
-def logging_config():
-    # TODO: Need to do log level of logger configurable -> configure log level according to value from env variable.
-    #  Validate configured log level. If value is not passed or is not correct, use DEBUG level as default
-    loger = logging.getLogger()
-    loger.setLevel(logging.DEBUG)
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(logging.DEBUG)  # TODO: why do you configure log level 2 times?
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    loger.addHandler(handler)
-    logging.info("Logging Configured")
-    return loger # TODO: You are not needed to return logger here. You can use it in other functions
+def logging_config(LOG_LEVEL):
+
+    if LOG_LEVEL not in ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']:
+        LOG_LEVEL = 'DEBUG'
+    numeric_level = getattr(logging, LOG_LEVEL)
+    logging.basicConfig(level=numeric_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    log.info("Logging Configured")
+
+
+def check_env_variables(env_vars):
+    dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+    load_dotenv(dotenv_path)
+    for var in env_vars:
+        if var not in os.environ:
+            log.critical(f"Ошибка: переменная среды {var} не установлена.")
+            sys.exit(1)
+
