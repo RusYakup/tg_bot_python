@@ -3,15 +3,12 @@ import requests
 import sys
 from telebot.async_telebot import AsyncTeleBot
 import logging
-import os
-from dotenv import load_dotenv
 import traceback
-import aiohttp
 log = logging.getLogger(__name__)
 
 
 
-def check_bot_token(token):
+def check_bot_token(token: str) -> None:
     url = f"https://api.telegram.org/bot{token}/getMe"
     response = requests.get(url)
     info = response.json()
@@ -20,16 +17,19 @@ def check_bot_token(token):
         log.info("Token tg bot verified: " + info['result']['username'])
     else:
         log.error("Token tg bot not verified")
+        log.debug(F"Exception traceback:\n", traceback.format_exc())
         sys.exit(1)
 
 
-def check_api_key(api_key):
+
+def check_api_key(api_key: str) -> None:
     url = f'http://api.weatherapi.com/v1/current.json?key={api_key}&q=Kazan'
     response = requests.get(url)
     if response.status_code == 200:
         log.info("The API key is correct.")
     else:
         log.error("The API key is incorrect.")
+        log.debug(F"Exception traceback:\n", traceback.format_exc())
         sys.exit(1)
 
 
@@ -138,29 +138,31 @@ def get_response(message, api_url: str, bot: AsyncTeleBot) -> json:
             logging.debug(f"Response 200")
             return json.loads(response.text)
         elif response.status_code == 400:
-            error_code = data['error']['code']
+            error_code = data.get('error', {}).get('code')
             if error_code == 1006:
-                bot.send_message(message.chat.id, "Город не найден, проверьте правильность названия города")
-                logging.error("Город не найден Response 400: code 1006")
+                bot.send_message(message.chat.id, "City not found, please check the city name")
+                logging.error("City not found - Response 400: code 1006")
                 exit(1)
             elif error_code == 9999:
-                bot.send_message("Сервер временно недоступен, попробуйте позже")
-                logging.error("Сервер временно недоступен Response 400: code 9999")
+                bot.send_message(message.chat.id, "Server temporarily unavailable, please try again later")
+                logging.error("Server temporarily unavailable - Response 400: code 9999")
             elif error_code == 1005:
-                logging.error("URL-адрес запроса API недействителен. Response 400: code 1005")
+                bot.send_message(message.chat.id, "Error in API request, please try again later")
+                logging.error("Invalid API request URL - Response 400: code 1005")
             else:
-                logging.error("Неизвестная ошибка Response 400")
-                bot.send_message("Неизвестная ошибка")
+                logging.error("Unknown error - Response 400")
+                logging.error(traceback.format_exc())
+                bot.send_message(message.chat.id, "Unknown error")
         elif response.status_code == 403:
-            logging.error(f"Response 403: {data['error']['message']}")
-            bot.send_message("Произошла техническая ошибка, попробуйте позже или обратитесь в поддержку")
+            logging.error(f"Response 403: {data.get('error', {}).get('message')}")
+            bot.send_message(message.chat.id, "Technical error occurred, please try again later or contact support")
         else:
-            logging.error(f"Response {response.status_code}: {data['error']['message']}")
-            bot.send_message("Ошибка получения данных о погоде, попробуйте позже")
+            logging.error(f"Response {response.status_code}: {data.get('error', {}).get('message')}")
+            bot.send_message(message.chat.id, "Error retrieving weather data, please try again later")
     except Exception as e:
-        bot.send_message(message.chat.id, f"Произошла ошибка")
+        bot.send_message(message.chat.id, "An error occurred")
         logging.error(e)
-        logging.error(traceback.format_exc())
+        logging.error(f"Exception:\n",traceback.format_exc())
 
 
 # async def get_response(message, api_url: str, bot: AsyncTeleBot) -> json:
@@ -189,18 +191,8 @@ def get_response(message, api_url: str, bot: AsyncTeleBot) -> json:
 
 def logging_config(LOG_LEVEL):
 
-    if LOG_LEVEL not in ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']:
-        LOG_LEVEL = 'DEBUG'
     numeric_level = getattr(logging, LOG_LEVEL)
     logging.basicConfig(level=numeric_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     log.info("Logging Configured")
 
-
-def check_env_variables(env_vars):
-    dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
-    load_dotenv(dotenv_path)
-    for var in env_vars:
-        if var not in os.environ:
-            log.critical(f"Ошибка: переменная среды {var} не установлена.")
-            sys.exit(1)
 
