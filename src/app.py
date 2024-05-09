@@ -18,6 +18,8 @@ app = FastAPI()
 log = logging.getLogger(__name__)
 
 
+# TODO: move to the webhook handler module
+
 @app.post("/tg_webhooks")
 async def tg_webhooks(request: Request, config: Annotated[Settings, Depends(get_settings)],
                       bot: AsyncTeleBot = Depends(get_bot)):
