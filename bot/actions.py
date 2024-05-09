@@ -23,6 +23,8 @@ log = logging.getLogger(__name__)
 
 # TODO: don't re-read the same env variable several times. Need to build config of application only one time during startup
 #  Then, all parts of application must use this config. Review how should do it here: https://fastapi.tiangolo.com/advanced/settings/#settings-and-environment-variables
+
+# TODO: need to rework as discussed. All actions receives this data via args from the main handler.
 TOKEN = os.environ['TOKEN']
 bot = AsyncTeleBot(os.environ['TOKEN'])
 API_KEY_weather = (os.environ['API_KEY'])

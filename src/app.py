@@ -11,22 +11,28 @@ import requests
 from helpers.model_message import *
 import os
 from telebot.async_telebot import AsyncTeleBot
+# TODO: incorrect path for import
 from waiting.status_of_values import user_input
 from dotenv import load_dotenv, find_dotenv
 import logging
+# TODO: incorrect path for import
 from helpers.model_setting_env import Settings
 
 
 app = FastAPI()
+# TODO: you are not needed to initialize bot here. As we discussed need to use get_bot function created in config module
+# TODO: Not needed to read env variables directly from envs. Should use Pydantic settings approach as discussed before
 bot = AsyncTeleBot(TOKEN)
 log = logging.getLogger(__name__)
 
 
+#  TODO: need to use dependency mechanism provided by fastapi to get settings(config) and bot always prior to handle request
 @app.post("/tg_webhooks")
 async def tg_webhooks(request: Request):
     x_telegram_bot_api_secret_token = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
     if request.method == 'POST':
         # TODO: why do you use aiohttp client context manager here?
+        # TODO: need to rework as disscussed
         async with aiohttp.ClientSession():
             try:
                 if x_telegram_bot_api_secret_token == settings.SECRET_TOKEN_TG_WEBHOOK:
@@ -38,8 +44,10 @@ async def tg_webhooks(request: Request):
 
                     user_input_values = user_input.get(message.chat.id, {}).values()
                     if any(value == 'waiting value' for value in user_input_values):
+                        # TODO: need to pass all missed arguments
                         await check_waiting(message)
                     else:
+                        # TODO: need to pass all missed arguments
                         await handlers(bot, message)
                 else:
                     raise HTTPException(status_code=401, detail="Unauthorized")
@@ -54,10 +62,14 @@ async def tg_webhooks(request: Request):
 
 
 if __name__ == "__main__":
+    # TODO: need to rework as discussed. Not needed to check existing of env variables manually. Pydantic model validates correctness of env variables
+    # TODO: You you didn't call get_settings? Need to cal and validate env variables
     settings = Settings()
     TOKEN, API_KEY, APP_DOMAIN, TG_BOT_API_URL, SECRET_TOKEN_TG_WEBHOOK, LOG_LEVEL = settings.TOKEN, settings.API_KEY, settings.APP_DOMAIN, settings.TG_BOT_API_URL, settings.SECRET_TOKEN_TG_WEBHOOK, settings.LOG_LEVEL
+    #  TODO: Why didn't delete dotenv? You use pydantic settings
     load_dotenv(find_dotenv())
     logging_config(LOG_LEVEL)
+    # TODO: not needed in case of using pydantic setting for config
     env_vars = ['TOKEN', 'API_KEY', 'APP_DOMAIN', 'TG_BOT_API_URL', 'SECRET_TOKEN_TG_WEBHOOK', 'LOG_LEVEL']
     check_env_variables(env_vars)
     check_bot_token(TOKEN)
