@@ -136,6 +136,7 @@ def weather_condition(precipitation: str) -> str:
         return precipitation
 
 
+# TODO: Incorrect annotation of output type. json - it's a module name. Not type
 def get_response(message, api_url: str, bot: AsyncTeleBot) -> json:
     try:
         response = requests.get(api_url)
