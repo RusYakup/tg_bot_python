@@ -14,6 +14,7 @@ from helpers.config import get_settings, Settings, get_bot
 from telebot.async_telebot import AsyncTeleBot
 
 app = FastAPI()
+
 log = logging.getLogger(__name__)
 
 
@@ -30,7 +31,6 @@ async def tg_webhooks(request: Request, config: Annotated[Settings, Depends(get_
                 log.debug("Exception traceback", traceback.format_exc())
                 return HTTPException(status_code=400,
                                      detail="JSONDecodeError: An error occurred, please try again later")
-
             try:
                 json_dict = json.loads(json_string.decode())
                 json_dict['message']['from_user'] = json_dict['message'].pop('from')
@@ -40,7 +40,6 @@ async def tg_webhooks(request: Request, config: Annotated[Settings, Depends(get_
                 log.debug(traceback.format_exc())
                 return HTTPException(status_code=400,
                                      detail="ValidationError: An error occurred, please try again later")
-
             try:
                 await check_chat_id(message)
                 user_input_values = user_input.get(message.chat.id, {}).values()
@@ -65,7 +64,7 @@ if __name__ == "__main__":
         settings = get_settings()
     except Exception as e:
         log.error(e)
-        log.error(f"Exception traceback:\n",traceback.format_exc())
+        log.error(f"Exception traceback:\n", traceback.format_exc())
         exit(1)
 
     logging_config(settings.LOG_LEVEL)
