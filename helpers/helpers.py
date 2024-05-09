@@ -10,6 +10,7 @@ log = logging.getLogger(__name__)
 
 def check_bot_token(token: str) -> None:
     url = f"https://api.telegram.org/bot{token}/getMe"
+    # TODO: here can be exception -> need to catch it to avoid unexpected behaviour -> exit(1)
     response = requests.get(url)
     info = response.json()
 
@@ -24,6 +25,7 @@ def check_bot_token(token: str) -> None:
 
 def check_api_key(api_key: str) -> None:
     url = f'http://api.weatherapi.com/v1/current.json?key={api_key}&q=Kazan'
+    # TODO: here can be exception -> need to catch it to avoid unexpected behaviour -> exit(1)
     response = requests.get(url)
     if response.status_code == 200:
         log.info("The API key is correct.")
@@ -44,6 +46,7 @@ def wind(win_dir: str, wind_kph: float, max_wind_kph: float) -> str:
         Returns:
         str: Sentence indicating wind direction, m/s speed and maximum wind speed on that day
         """
+    #
     direction = {
         'N': "Северный",
         'NNE': "Северо-северо-восточный",
@@ -72,6 +75,9 @@ def wind(win_dir: str, wind_kph: float, max_wind_kph: float) -> str:
 
 
 def weather_condition(precipitation: str) -> str:
+    # TODO: some messages send to chat using Russian, some using English. Need to use one language for interaction with user.
+    # TODO: You can add command /set_language to adjust language by user. By default it can by English. Store use language in table in the future
+    #  Need to prepare dictionary with of all sentences that used to communicate with user in English and Russian
     weather_dict = {
         "Sunny": "Солнечно",
         "Partly cloudy": "Переменная облачность",
