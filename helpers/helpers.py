@@ -11,21 +11,29 @@ log = logging.getLogger(__name__)
 def check_bot_token(token: str) -> None:
     url = f"https://api.telegram.org/bot{token}/getMe"
     # TODO: here can be exception -> need to catch it to avoid unexpected behaviour -> exit(1)
-    response = requests.get(url)
-    info = response.json()
-
-    if response.status_code == 200:
-        log.info("Token tg bot verified: " + info['result']['username'])
-    else:
-        log.error("Token tg bot not verified")
-        log.debug(F"Exception traceback:\n", traceback.format_exc())
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        info = response.json()
+        log.info("Token for Telegram bot verified: " + info['result']['username'])
+    except requests.exceptions.RequestException as e:
+        log.error("Error verifying Telegram bot token")
+        log.debug(f"Exception: {e}")
         sys.exit(1)
-
 
 
 def check_api_key(api_key: str) -> None:
     url = f'http://api.weatherapi.com/v1/current.json?key={api_key}&q=Kazan'
     # TODO: here can be exception -> need to catch it to avoid unexpected behaviour -> exit(1)
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        info = response.json()
+        log.info("The API key is correct.")
+    except requests.exceptions.RequestException as e:
+        log.error("Error verifying API key")
+        log.debug(f"Exception: {e}")
+        sys.exit(1)
     response = requests.get(url)
     if response.status_code == 200:
         log.info("The API key is correct.")

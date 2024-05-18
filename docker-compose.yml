@@ -11,5 +11,5 @@ services:
       - API_KEY=${API_KEY}
     restart: unless-stopped
 
-    command: python actions.py
+    command: python app.py
 

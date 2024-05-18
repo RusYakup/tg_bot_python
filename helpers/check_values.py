@@ -3,32 +3,101 @@ from bot.actions import (add_city, start_message, change_city, weather, weather_
                          help_message, add_day, forecast_for_several_days, get_forecast_several, statistic, prediction)
 from helpers.config import Settings
 from telebot.async_telebot import AsyncTeleBot
+import logging
+import traceback
+import asyncpg
+# from postgres.func import load_data
+from postgres.func import load_data
 
-async def check_chat_id(message):
-    if message.chat.id not in user_input:
-        user_input[message.chat.id] = {'city': 'Moskva',
-                                       'location': None,
-                                       'date_difference': None,
-                                       'qty_days': None}
+log = logging.getLogger(__name__)
 
+
+async def check_chat_id(message, pool: asyncpg.Pool):
+    try:
+        pass
+        # chat_id = message.chat.id
+        # print(chat_id)
+        # query = "INSERT INTO user_state (chat_id, city, date_difference, qty_days) VALUES ($1, $2, $3, $4) ON CONFLICT (chat_id) DO NOTHING"
+        # args = [chat_id, "Moskva", "None", "None"]
+        # await pool.fetch(query, *args)
+        # print(chat_id)
+        # await check_chat_id(message, pool)
+        # user_input_values = user_input.get(message.chat.id, {}).values()
+        # if any(value == 'waiting value' for value in user_input_values):
+        #     await check_waiting(message, bot, config)
+        # else:
+        #     await handlers(message, bot, config)
+
+    except Exception as e:
+        log.debug("An error occurred: %s", str(e))
+        log.debug(traceback.format_exc())
+
+
+# try:
+#         async with pool.transaction():
+#             existing_chat_id = await pool.fetchrow("SELECT chat_id FROM user_state WHERE chat_id = $1",
+#                                                    message.chat.id)
+#             if existing_chat_id is None:
+#                 await pool.execute(
+#                     "INSERT INTO user_state (chat_id, city, date_difference, qty_days) VALUES ($1, $2, $3, $4)",
+#                     message.chat.id, "Moskva", None, None)
+#     except Exception as e:
+#         log.debug("An error occurred: %s", str(e))
+#         log.debug(traceback.format_exc())
+#         await pool.close()
+
+# if message.chat.id not in user_input:
+#     user_input[message.chat.id] = {'city': 'Moskva',
+#                                    'date_difference': "None",
+#                                    'qty_days': "None"}
+#
+
+async def check_status(message, pool):
+    # try:
+        pass
+    #     query = "SELECT city, date_difference, qty_days FROM user_state WHERE chat_id = $1"
+    #     args = [message.chat.id]
+    #     status = await load_data(pool, query, args)
+    #
+    #     if status[0][1] == "waiting value":
+    #         await add_city(message, pool)
+    #     if status[1][1] == "waiting value":
+    #         await add_day(message, pool)
+    #         query_new = "UPDATE user_state SET date_difference = $1 WHERE chat_id = $2"
+    #         new_status = "None"
+    #         await pool.execute(query_new, new_status, message.chat.id)
+    #     if status[2][1] == "waiting value":
+    #         await get_forecast_several(message, pool)
+    #         query_new = "UPDATE user_state SET qty_days = $1 WHERE chat_id = $2"
+    #         new_status = "None"
+    #         await pool.execute(query_new, new_status, message.chat.id)
+    # except Exception as e:
+    #     log.error("An error occurred: %s", str(e))
+    #     log.debug("Exception traceback", traceback.format_exc())
+    #
 
 async def check_waiting(message, bot: AsyncTeleBot, config: Settings):
-    if user_input[message.chat.id]['city'] == "waiting value":
-        await add_city(message, bot, config)
-    # if user_input[message.chat.id]['location'] == "waiting value":
-    #     print("waiting value: location")
-    #     await get_coordinates(message)
-    if user_input[message.chat.id]['date_difference'] == "waiting value":
-        await add_day(message, bot, config)
-        user_input[message.chat.id]['date_difference'] = None
-    if user_input[message.chat.id]['qty_days'] == "waiting value":
-        await get_forecast_several(message, bot, config)
-        user_input[message.chat.id]['qty_days'] = None
+    try:
+        if user_input[message.chat.id]['city'] == "waiting value":
+            await add_city(message, bot, config)
+        # if user_input[message.chat.id]['location'] == "waiting value":
+        #     print("waiting value: location")
+        #     await get_coordinates(message)
+        if user_input[message.chat.id]['date_difference'] == "waiting value":
+            await add_day(message, bot, config)
+            user_input[message.chat.id]['date_difference'] = None
+        if user_input[message.chat.id]['qty_days'] == "waiting value":
+            await get_forecast_several(message, bot, config)
+            user_input[message.chat.id]['qty_days'] = None
+    except Exception as e:
+        log.error("An error occurred: %s", str(e))
+        log.debug("Exception traceback", traceback.format_exc())
+
 
 
 async def handlers(message, bot, config):
     if message.text == '/start':
-        await start_message(message, bot)
+        await start_message(message, bot, config)
     elif message.text == '/help':
         await help_message(message, bot)
     elif message.text == '/change_city':

@@ -11,7 +11,7 @@ import traceback
 log = logging.getLogger(__name__)
 
 
-async def start_message(message, bot):
+async def start_message(message, bot, config):
     try:
         log.info("User %s started bot", message.from_user.first_name)
         msg = (
@@ -28,7 +28,9 @@ async def start_message(message, bot):
             f'/prediction - prediction of the average temperature for 3 days\n'
             f'or simply press the menu to display all commands \n')
         await bot.send_message(message.chat.id, msg)
-        user_input[message.chat.id] = {'city': None, 'location': None, 'date_difference': None, 'qty_days': None}
+        # connect = await connect_bd(config.POSTGRES_USER, config.POSTGRES_PASSWORD, config.POSTGRES_DB)
+        # connect.execute(f"INSERT INTO user_state (chat_id, city, date_difference, qty_days) VALUES ({message.chat.id}, )")
+        user_input[message.chat.id] = {'city': None, 'date_difference': None, 'qty_days': None}
     except Exception as e:
         log.debug("An error occurred: %s", str(e))
         log.debug(traceback.format_exc())
