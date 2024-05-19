@@ -5,22 +5,21 @@ from helpers.config import Settings
 from telebot.async_telebot import AsyncTeleBot
 import logging
 import traceback
-import asyncpg
-# from postgres.func import load_data
-from postgres.func import load_data
+from helpers.config import DataBaseClass
+
 
 log = logging.getLogger(__name__)
 
 
-async def check_chat_id(message, pool: asyncpg.Pool):
+async def check_chat_id(message, DataBase: DataBaseClass):
     try:
-        pass
-        # chat_id = message.chat.id
-        # print(chat_id)
-        # query = "INSERT INTO user_state (chat_id, city, date_difference, qty_days) VALUES ($1, $2, $3, $4) ON CONFLICT (chat_id) DO NOTHING"
-        # args = [chat_id, "Moskva", "None", "None"]
-        # await pool.fetch(query, *args)
-        # print(chat_id)
+
+        chat_id = message.chat.id
+
+        query = "INSERT INTO user_state (chat_id, city, date_difference, qty_days) VALUES ($1, $2, $3, $4) ON CONFLICT (chat_id) DO NOTHING"
+        args = [chat_id, "Moskva", "None", "None"]
+        await DataBase.execute(query, *args, fetch=True)
+
         # await check_chat_id(message, pool)
         # user_input_values = user_input.get(message.chat.id, {}).values()
         # if any(value == 'waiting value' for value in user_input_values):
@@ -76,8 +75,12 @@ async def check_status(message, pool):
     #     log.debug("Exception traceback", traceback.format_exc())
     #
 
-async def check_waiting(message, bot: AsyncTeleBot, config: Settings):
+async def check_waiting(message, bot: AsyncTeleBot, config: Settings, DataBase: DataBaseClass):
     try:
+
+
+
+
         if user_input[message.chat.id]['city'] == "waiting value":
             await add_city(message, bot, config)
         # if user_input[message.chat.id]['location'] == "waiting value":
