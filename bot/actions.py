@@ -1,17 +1,16 @@
 from helpers.helpers import wind, get_response
-from helpers.models import *
+from helpers.models_weather import *
 from pydantic import ValidationError
-from helpers.status_of_values import user_input
 from datetime import datetime, date, timedelta
+from postgres.database_adapters import execute
 import logging
 import aiohttp
 import traceback
 
-
 log = logging.getLogger(__name__)
 
 
-async def start_message(message, bot, config):
+async def start_message(pool, message, bot, config):
     try:
         log.info("User %s started bot", message.from_user.first_name)
         msg = (
@@ -28,41 +27,44 @@ async def start_message(message, bot, config):
             f'/prediction - prediction of the average temperature for 3 days\n'
             f'or simply press the menu to display all commands \n')
         await bot.send_message(message.chat.id, msg)
-        # connect = await connect_bd(config.POSTGRES_USER, config.POSTGRES_PASSWORD, config.POSTGRES_DB)
-        # connect.execute(f"INSERT INTO user_state (chat_id, city, date_difference, qty_days) VALUES ({message.chat.id}, )")
-        user_input[message.chat.id] = {'city': None, 'date_difference': None, 'qty_days': None}
+        query = ("INSERT INTO user_state (chat_id, city, date_difference, qty_days) VALUES ($1, $2, $3, $4)"
+                 " ON CONFLICT (chat_id) DO NOTHING")
+        args = [message.chat.id, "Moskva", "None", "None"]
+        await execute(pool, query, *args, fetch=True)
     except Exception as e:
-        log.debug("An error occurred: %s", str(e))
+        log.error("An error occurred: %s", str(e))
         log.debug(traceback.format_exc())
         await bot.send_message(message.chat.id, 'An error occurred. Please try again later.')
 
 
-async def change_city(message, bot):
+async def change_city(pool, message, bot):
     try:
         log.debug("User {message.chat.id} wants to change city")
         await bot.send_message(message.chat.id, 'Please enter the new city')
-        user_input[message.chat.id]['city'] = 'waiting value'
+        query = "UPDATE user_state SET city = $1 WHERE chat_id = $2"
+        await execute(pool, query, 'waiting_value', message.chat.id, fetch=True)
         log.debug(f" User {message.chat.id} waiting value: city")
     except Exception as e:
-        log.debug("An error occurred: %s", str(e))
+        log.error("An error occurred: %s", str(e))
         log.debug(traceback.format_exc())
         await bot.send_message(message.chat.id, 'An error occurred. Please try again later.')
 
 
-async def add_city(message, bot, config):
+async def add_city(pool, message, bot, config):
     try:
         log.debug("verify city")
         url = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={message.text}'
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 if response.status == 200:
-                    user_input[message.chat.id]['city'] = message.text
+                    query = "UPDATE user_state SET city = $1 WHERE chat_id = $2"
+                    await execute(pool, query, message.text, message.chat.id, fetch=True)
                     log.debug(f"User {message.chat.id} added new city: {message.text}")
                     await bot.send_message(message.chat.id, 'City added successfully. Select the next command.')
                 else:
                     await bot.send_message(message.chat.id, 'City not found. Please try again')
     except Exception as e:
-        log.debug("An error occurred: %s", str(e))
+        log.error("An error occurred: %s", str(e))
         log.debug(traceback.format_exc())
         await bot.send_message(message.chat.id, 'An error occurred. Please try again later.')
 
@@ -83,15 +85,15 @@ async def help_message(message, bot):
 
         await bot.send_message(message.chat.id, full_msg)
     except Exception as e:
-        log.debug("An error occurred: %s", str(e))
+        log.error("An error occurred: %s", str(e))
         log.debug(traceback.format_exc())
         await bot.send_message(message.chat.id, 'An error occurred. Please try again later.')
 
 
-async def weather(message, bot, config):
+async def weather(message, bot, config, status_user):
     try:
-        log.debug(f"User requested current weather for': {user_input[message.chat.id]['city']}")
-        url_current = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={user_input[message.chat.id]["city"]}'
+        log.debug(f"User requested current weather for': {status_user['city']}")
+        url_current = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={status_user["city"]}'
         data = get_response(message, url_current, bot)
         weather_data = WeatherData.parse_obj(data)
         forecast = weather_data.forecast.forecastday[0].day
@@ -109,58 +111,59 @@ async def weather(message, bot, config):
         await bot.send_message(message.chat.id, current_msg)
         return log.info("current_weather: Success")
     except Exception as e:
-        log.debug("An error occurred: %s", str(e))
-        log.debug(traceback.format_exc())
+        log.error("An error occurred: %s", str(e))
+        log.error(traceback.format_exc())
         await bot.send_message(message.chat.id, f"Error")
     except ValidationError as e:
-        log.debug(f"Data validation error {e}")
+        log.error(f"Data validation error {e}")
         await bot.send_message(message.chat.id, 'An error occurred. Please try again later.')
 
 
-async def weather_forecast(message, bot):
+async def weather_forecast(pool, message, bot):
     try:
         today_date = date.today()
         max_date = today_date + timedelta(days=10)
         await bot.send_message(message.chat.id,
                                f'Input the date from {today_date} до {max_date}:')
-        user_input[message.chat.id]['date_difference'] = 'waiting value'
-        log.debug(f" User {message.chat.id} waiting value: city")
+        query = "UPDATE user_state SET date_difference = $1 WHERE chat_id = $2"
+        await execute(pool, query, 'waiting_value', message.chat.id, fetch=True)
+        log.info(f" User {message.chat.id} waiting_value: city")
     except Exception as e:
-        log.debug("An error occurred: %s", str(e))
+        log.error("An error occurred: %s", str(e))
         log.debug(traceback.format_exc())
         await bot.send_message(message.chat.id, 'An error occurred. Please try again later.')
 
 
-async def add_day(message, bot, config):
+async def add_day(pool, message, bot, config):
     try:
         today_date = date.today()
         input_date = datetime.strptime(message.text, "%Y-%m-%d").date()
         if (input_date - today_date).days <= 10:
-            user_input[message.chat.id]['date_difference'] = (input_date - today_date).days + 2
-            await get_weather_forecast(message, bot, config)
-            return
+            date_difference = (input_date - today_date).days + 2
+            await get_weather_forecast(pool, date_difference, message, bot, config)
         else:
             max_date = today_date + timedelta(days=10)
             await bot.send_message(message.chat.id, f'The entered date must be no later than {max_date}.')
             log.debug("add_day: The entered date must be no later than {max_date}.")
-            return
     except ValueError:
         await bot.send_message(message.chat.id, "Date must be in the format YYYY-MM-DD.")
-        log.debug("add_day: Does not match the format YYYY-MM-DD.")
+        log.error("add_day: Does not match the format YYYY-MM-DD.")
     except Exception as e:
-        log.debug("An error occurred: %s", str(e))
+        log.error("An error occurred: %s", str(e))
         log.debug(traceback.format_exc())
-    log.debug(f"User input (weather_forecast): {message.text}")
+        log.debug(f"User input (weather_forecast): {message.text}")
 
 
-async def get_weather_forecast(message, bot, config):
+async def get_weather_forecast(pool, date_difference, message, bot, config):
     try:
+        query = "SELECT city FROM user_state WHERE chat_id = $1"
+        city = await execute(pool, query, message.chat.id, fetch=True)
         log.debug(
-            f"User requested weather forecast {user_input[message.chat.id]['date_difference']} days for: {user_input[message.chat.id]['city']}")
-        url_forecast = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={user_input[message.chat.id]["city"]}&days={user_input[message.chat.id]["date_difference"]}&aqi=no&alerts=no'
+            f"User requested weather forecast {date_difference} days")
+        url_forecast = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={city[0][0]}&days={date_difference}&aqi=no&alerts=no'
         data = get_response(message, url_forecast, bot)
         weather_data = WeatherData.parse_obj(data)
-        correction_num = int(user_input[message.chat.id]['date_difference']) - 2
+        correction_num = int(date_difference) - 2
         forecast_msg = (
             f"{weather_data.location.name} ({weather_data.location.region}):{weather_data.forecast.forecastday[correction_num].date}\n"
             f"Maximum temperature: {weather_data.forecast.forecastday[correction_num].day.maxtemp_c}°C\n"
@@ -169,9 +172,12 @@ async def get_weather_forecast(message, bot, config):
             f"Precipitation: {weather_data.forecast.forecastday[correction_num].day.daily_chance_of_rain if weather_data.current.temp_c > 0 else weather_data.forecast.forecastday[1].day.daily_chance_of_snow}%\n"
             f"{weather_data.forecast.forecastday[correction_num].day.condition.text}")
         await bot.send_message(message.chat.id, forecast_msg)
+        query_new = "UPDATE user_state SET date_difference = $1 WHERE chat_id = $2"
+        new_status = "None"
+        await execute(pool, query_new, new_status, message.chat.id, fetch=True)
         log.info(f"weather_forecast: Success")
     except Exception as e:
-        log.debug("An error occurred: %s", str(e))
+        log.error("An error occurred: %s", str(e))
         log.debug(traceback.format_exc())
         await bot.send_message(message.chat.id, f"Error")
     except ValidationError as e:
@@ -179,12 +185,13 @@ async def get_weather_forecast(message, bot, config):
         log.error(f"weather_forecast: Validation error {e}")
 
 
-async def forecast_for_several_days(message, bot):
+async def forecast_for_several_days(pool, message, bot):
     try:
         await bot.send_message(message.chat.id,
                                f'In this section, you can get the weather forecast for several days.\n'
                                f'Enter the number of days (from 1 to 10):')
-        user_input[message.chat.id]['qty_days'] = 'waiting value'
+        query = "UPDATE user_state SET qty_days = $1 WHERE chat_id = $2"
+        await execute(pool, query, 'waiting_value', message.chat.id, fetch=True)
     except Exception as e:
         log.debug("An error occurred: %s", str(e))
         log.debug(traceback.format_exc())
@@ -192,10 +199,12 @@ async def forecast_for_several_days(message, bot):
         return
 
 
-async def get_forecast_several(message, bot, config):
+async def get_forecast_several(pool, message, bot, config):
     try:
+        query = "SELECT city FROM user_state WHERE chat_id = $1"
+        city = await execute(pool, query, message.chat.id, fetch=True)
         qty_days = int(message.text)
-        log.debug(f"User requested weather forecast {qty_days} days: {user_input[message.chat.id]['city']}")
+        log.debug(f"User requested weather forecast {qty_days} days: {city[0][0]}")
         if 1 <= qty_days <= 10:
             qty_days += 1
         else:
@@ -203,15 +212,15 @@ async def get_forecast_several(message, bot, config):
             return
     except ValueError:
         await bot.send_message(message.chat.id, 'Invalid input format')
-        log.debug("forecast_for_several_days: Invalid input format")
+        log.error("forecast_for_several_days: Invalid input format")
         return
     except Exception as e:
-        log.debug("An error occurred: %s", str(e))
+        log.error("An error occurred: %s", str(e))
         log.debug(traceback.format_exc())
         return
 
     url_forecast_several = (f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&'
-                            f'q={user_input[message.chat.id]["city"]}&days={qty_days}&aqi=no&alerts=no')
+                            f'q={city[0][0]}&days={qty_days}&aqi=no&alerts=no')
     try:
         data = get_response(message, url_forecast_several, bot)
         weather_data = WeatherData.parse_obj(data)
@@ -229,7 +238,7 @@ async def get_forecast_several(message, bot, config):
                                    )
         log.info(f"several forecast : Success")
     except Exception as e:
-        log.debug("An error occurred: %s", str(e))
+        log.error("An error occurred: %s", str(e))
         log.debug(traceback.format_exc())
         await bot.send_message(message.chat.id, f"Error")
         return
@@ -238,14 +247,15 @@ async def get_forecast_several(message, bot, config):
     return
 
 
-async def statistic(message, bot, config):
+async def statistic(pool, message, bot, config, status_user):
     try:
         today_date = date.today()
-        log.debug(f"User requested weather statistic: {user_input[message.chat.id]['city']}")
+        log.debug(f"User requested weather statistic: {status_user['city']}")
+        print(status_user)
         for days in range(1, 8):
             #  TODO: duplication of code
             statistic_date = today_date - timedelta(days=days)
-            url_statistic = f'https://api.weatherapi.com/v1/history.json?key={config.API_KEY}&q={user_input[message.chat.id]["city"]}&dt={statistic_date}'
+            url_statistic = f'https://api.weatherapi.com/v1/history.json?key={config.API_KEY}&q={status_user["city"]}&dt={statistic_date}'
             data = get_response(message, url_statistic, bot)
             day_details = DayDetails.parse_obj(data['forecast']['forecastday'][0]['day'])
             day_details_data = data['forecast']['forecastday'][0]['date']
@@ -266,21 +276,21 @@ async def statistic(message, bot, config):
         log.error(f"statistic : Validation error {e}")
 
 
-async def prediction(message, bot, config):
+async def prediction(pool, message, bot, config, status_user):
     try:
         today_date = date.today()
-        log.debug(f"User requested weather prediction: {user_input[message.chat.id]['city']}")
+        log.debug(f"User requested weather prediction: {status_user['city']}")
         avgtemp_c_7days = set()
         for days in range(1, 8):
             statistic_date = today_date - timedelta(days=days)
-            url_prediction = f'https://api.weatherapi.com/v1/history.json?key={config.API_KEY}&q={user_input[message.chat.id]["city"]}&dt={statistic_date}'
+            url_prediction = f'https://api.weatherapi.com/v1/history.json?key={config.API_KEY}&q={status_user["city"]}&dt={statistic_date}'
             data = get_response(message, url_prediction, bot)
             day_details = DayDetails.parse_obj(data['forecast']['forecastday'][0]['day'])
             avgtemp_c_7days.add(day_details.avgtemp_c)
         avgtemp_c_7days = round(sum(avgtemp_c_7days) / len(avgtemp_c_7days))
         avgtemp_c_3days = set()
         for days in range(3):
-            url_forecast_several = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={user_input[message.chat.id]["city"]}&days=3&aqi=no&alerts=no'
+            url_forecast_several = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={status_user["city"]}&days=3&aqi=no&alerts=no'
             data = get_response(message, url_forecast_several, bot)
             for day_num in range(1, len(data['forecast']['forecastday'])):
                 weather_data = WeatherData.parse_obj(data)

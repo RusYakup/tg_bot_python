@@ -4,13 +4,14 @@ import sys
 from telebot.async_telebot import AsyncTeleBot
 import logging
 import traceback
+from typing import Any
+
 log = logging.getLogger(__name__)
 
 
 
 def check_bot_token(token: str) -> None:
     url = f"https://api.telegram.org/bot{token}/getMe"
-    # TODO: here can be exception -> need to catch it to avoid unexpected behaviour -> exit(1)
     try:
         response = requests.get(url)
         response.raise_for_status()
@@ -145,7 +146,7 @@ def weather_condition(precipitation: str) -> str:
 
 
 # TODO: Incorrect annotation of output type. json - it's a module name. Not type
-def get_response(message, api_url: str, bot: AsyncTeleBot) -> json:
+def get_response(message, api_url: str, bot: AsyncTeleBot) -> Any:
     try:
         response = requests.get(api_url)
         data = json.loads(response.text)
@@ -179,29 +180,6 @@ def get_response(message, api_url: str, bot: AsyncTeleBot) -> json:
         logging.error(e)
         logging.error(f"Exception:\n",traceback.format_exc())
 
-
-# async def get_response(message, api_url: str, bot: AsyncTeleBot) -> json:
-#     try:
-#         async with aiohttp.ClientSession() as session:
-#             async with session.get(api_url) as response:
-#                 data = await response.json()
-#                 if response.status == 200:
-#                     log.debug(f"Response 200")
-#                     return data
-#                 elif response.status == 400:
-#                     error_code = data['error']['code']
-#                     if error_code == 1006:
-#                         await bot.send_message(message.chat.id, "Город не найден, проверьте правильность названия города")
-#                         log.error("Город не найден Response 400: code 1006")
-#                 elif response.status == 403:
-#                     log.error(f"Response 403: {data['error']['message']}")
-#                     await bot.send_message(message.chat.id, "Произошла техническая ошибка, попробуйте позже или обратитесь в поддержку")
-#                 else:
-#                     log.error(f"Response {response.status}: {data['error']['message']}")
-#                     await bot.send_message(message.chat.id, "Ошибка получения данных о погоде, попробуйте позже")
-#     except Exception as e:
-#         await bot.send_message(message.chat.id, f"Произошла ошибка")
-#         log.error(e)
 
 
 def logging_config(LOG_LEVEL):

@@ -1,25 +1,24 @@
-from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi import FastAPI, Request, HTTPException, Depends, Security
+
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from typing import Annotated
 from helpers.helpers import check_bot_token, check_api_key, logging_config
-from helpers.check_values import check_chat_id, check_waiting #, handlers,
+from helpers.check_values import check_chat_id, check_waiting, handlers
 from handlers.web_hook_handler import set_webhook
-#from postgres.func import execute_query #create_table, load_data,
+from postgres.database_adapters import create_table, create_pool
 from bot.actions import *
 import uvicorn
 import asyncio
 import json
 from helpers.model_message import *
-#from helpers.status_of_values import user_input
 import logging
-from helpers.config import get_settings, Settings, get_bot, DataBase, DataBaseClass # create_pool
+from helpers.config import get_settings, Settings, get_bot
 from telebot.async_telebot import AsyncTeleBot
-import traceback
-
-
-import asyncpg
+from asyncpg.pool import Pool
 
 app = FastAPI()
-
+security = HTTPBasic()
+global_pool = None
 log = logging.getLogger(__name__)
 
 
@@ -27,12 +26,13 @@ log = logging.getLogger(__name__)
 
 @app.post("/tg_webhooks")
 async def tg_webhooks(request: Request, config: Annotated[Settings, Depends(get_settings)],
-                      bot: AsyncTeleBot = Depends(get_bot)):
-    await DataBase.create_pool()
+                      bot: AsyncTeleBot = Depends(get_bot), pool: Pool = Depends(create_pool)):
     x_telegram_bot_api_secret_token = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
     if x_telegram_bot_api_secret_token == settings.SECRET_TOKEN_TG_WEBHOOK:
         if request.method == 'POST':
             try:
+                global global_pool
+                global_pool = pool
                 json_string = await request.body()
             except json.decoder.JSONDecodeError:
                 log.error("Telegram webhook request body: JSONDecodeError")
@@ -49,28 +49,16 @@ async def tg_webhooks(request: Request, config: Annotated[Settings, Depends(get_
                 return HTTPException(status_code=400,
                                      detail="ValidationError: An error occurred, please try again later")
             try:
+                status_user = await check_chat_id(pool, message)
                 print(message)
-                use = 'user_state'
-                res = await DataBase.execute("SELECT * FROM user_state", fetch=True)
-                print(res)
-                query = ("INSERT INTO user_state (chat_id, city, date_difference, qty_days) VALUES ($1, $2, $3, $4) "
-                         "ON CONFLICT (chat_id) DO NOTHING")
-                args = [90100, "Я поебдил", "эту", "Хрень"]
-                await DataBase.execute(query, *args, fetch=True)
-                await check_chat_id(message, DataBase)
-                await check_waiting(message, bot, config)
-                # await handlers(message, bot, config)
-
-                query =
-                # user_input_values = user_input.get(message.chat.id, {}).values()
-                # if any(value == 'waiting value' for value in user_input_values):
-                #     await check_waiting(message, bot, config)
-                # else:
-                #     await handlers(message, bot, config)
+                if "waiting_value" in status_user.values():
+                    await check_waiting(status_user, pool, message, bot, config)
+                else:
+                    await handlers(pool, message, bot, config, status_user)
             except Exception as exc:
                 log.error("An error occurred: %s", str(exc))
                 log.error("Exception traceback", traceback.format_exc())
-                # return bot.send_message(message.chat.id, "An error occurred, please try again later")
+                return bot.send_message(message.chat.id, "An error occurred, please try again later")
         else:
             log.error(f"Invalid request method: {request.method}")
             return HTTPException(status_code=405, detail="Method not allowed")
@@ -78,25 +66,58 @@ async def tg_webhooks(request: Request, config: Annotated[Settings, Depends(get_
         log.error(f"Invalid X-Telegram-Bot-Api-Secret-Token: {x_telegram_bot_api_secret_token}")
         return HTTPException(status_code=401, detail="Unauthorized")
 
-
-async def mainer(pool):
+def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
     try:
-        query = "INSERT INTO user_state (chat_id, city, date_difference, qty_days) VALUES ($1, $2, $3, $4) ON CONFLICT (chat_id) DO UPDATE SET city = $2, date_difference = $3, qty_days = $4"
-        args = [000, "Moskva", "Nondde", "None"]
-        await execute_query(query, *args)
-        query = "INSERT INTO user_state (chat_id, city, date_difference, qty_days) VALUES ($1, $2, $3, $4) ON CONFLICT (chat_id) DO UPDATE SET city = $2, date_difference = $3, qty_days = $4"
-        args = [0000000000, "Moskva2", "Noddne2", "None2"]
-        await execute_query(query, *args)
-        query = "INSERT INTO user_state (chat_id, city, date_difference, qty_days) VALUES ($1, $2, $3, $4) ON CONFLICT (chat_id) DO NOTHING"
-        args = [1110000311, "Moskva", "Nondde", "None"]
-        await execute_query(query, *args)
-
-    except Exception as e:
+        correct_username = settings.GET_USER
+        correct_password = settings.GET_PASSWORD
+        if credentials.username == correct_username and credentials.password == correct_password:
+            log.info("Credentials verified successfully")
+            return credentials
+    except HTTPException as e:
         log.debug("An error occurred: %s", str(e))
-        log.debug(traceback.format_exc())
-        exit(1)
+        log.debug("Exception traceback", traceback.format_exc())
+        raise HTTPException(status_code=401, detail="Неверный логин или пароль")
 
 
+@app.get("/users_actions")
+async def get_users_actions(chat_id: int,
+                            from_ts: int = None,
+                            until_ts: int = None,
+                            limit: int = 1000,
+                            credentials: HTTPBasicCredentials = Security(verify_credentials),
+                            global_pool: Pool = Depends(create_pool)):
+    try:
+        if from_ts is not None and until_ts is not None:
+            print("SELECT * FROM statistic WHERE chat_id = $1 AND ts >= $2 AND ts <= $3 ORDER BY ts DESC LIMIT $4")
+            query = "SELECT * FROM statistic WHERE chat_id = $1 AND ts >= $2 AND ts <= $3 ORDER BY ts DESC LIMIT $4"
+            args = [chat_id, from_ts, until_ts, limit]
+            res = await execute(global_pool, query, *args, fetch=True)
+        if from_ts is not None:
+            print("SELECT * FROM statistic WHERE chat_id = $1 AND ts >= $2 ORDER BY ts DESC LIMIT $3")
+            query = "SELECT * FROM statistic WHERE chat_id = $1 AND ts >= $2 ORDER BY ts DESC LIMIT $3"
+            args = [chat_id, from_ts, limit]
+            res = await execute(global_pool, query, *args, fetch=True)
+        else:
+            print("SELECT * FROM statistic WHERE chat_id = $1")
+            query = "SELECT * FROM statistic WHERE chat_id = $1"
+            args = [chat_id]
+            res = await execute(global_pool,  query, *args, fetch=True)
+        return res
+    except Exception as e:
+        log.error("An error occurred: %s", str(e))
+        log.error("Exception traceback", traceback.format_exc())
+
+
+@app.get("/actions_count")
+async def get_actions_count(chat_id: int,
+                            from_ts: int = None,
+                            until_ts: int = None,
+                            credentials: HTTPBasicCredentials = Security(verify_credentials),
+                            global_pool: Pool = Depends(create_pool)):
+    query = "SELECT chat_id, DATE_TRUNC('month', to_timestamp(ts)) AS month, COUNT(*) AS actions_count FROM statistic WHERE chat_id = $1 GROUP BY chat_id, month"
+    args = [chat_id]
+    res = await execute(global_pool, query, *args, fetch=True)
+    return res
 
 
 if __name__ == "__main__":
@@ -106,30 +127,10 @@ if __name__ == "__main__":
         check_bot_token(settings.TOKEN)
         check_api_key(settings.API_KEY)
         set_webhook(settings.TOKEN, settings.APP_DOMAIN, settings.SECRET_TOKEN_TG_WEBHOOK)
-        # loop = asyncio.get_event_loop()
-        # loop.run_until_complete(DataBase.create_pool())
-        asyncio.run(DataBase.create_table())
+        asyncio.run(create_table())
         uvicorn.run(app, host="0.0.0.0", port=8888)
 
     except Exception as e:
         log.error(e)
         log.error(f"Exception traceback:\n", traceback.format_exc())
         exit(1)
-
-# if __name__ == "__main__":
-#     try:
-#         settings = get_settings()
-#     except Exception as e:
-#         log.error(e)
-#         log.error(f"Exception traceback:\n", traceback.format_exc())
-#         exit(1)
-#
-#     logging_config(settings.LOG_LEVEL)
-#     check_bot_token(settings.TOKEN)
-#     check_api_key(settings.API_KEY)
-#     set_webhook(settings.TOKEN, settings.APP_DOMAIN, settings.SECRET_TOKEN_TG_WEBHOOK)
-#     pool = asyncio.run(create_pool())
-#     loop = asyncio.get_event_loop()
-#     # asyncio.run(create_table(pool=pool))
-#
-#     uvicorn.run(app, host="0.0.0.0", port=8888)

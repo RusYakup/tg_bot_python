@@ -22,3 +22,5 @@ def set_webhook(token: str, ngrok: str, secret_token: str) -> None:
         log.error(f'Webhook setup failed :\n{e}')
         log.debug(F"Exception traceback:\n", traceback.format_exc())
         sys.exit(1)
+
+
