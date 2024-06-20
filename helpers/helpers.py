@@ -11,6 +11,15 @@ log = logging.getLogger(__name__)
 
 
 def check_bot_token(token: str) -> None:
+    """
+    A function to check the validity of a Telegram bot token by making a request to the Telegram API.
+
+    Parameters:
+    token (str): The token of the Telegram bot to be checked.
+
+    Returns:
+    None
+    """
     url = f"https://api.telegram.org/bot{token}/getMe"
     try:
         response = requests.get(url)
@@ -24,6 +33,15 @@ def check_bot_token(token: str) -> None:
 
 
 def check_api_key(api_key: str) -> None:
+    """
+    A function to check the validity of an API key by making a request to a weather API.
+
+    Parameters:
+    - api_key (str): The API key to be checked.
+
+    Returns:
+    - None
+    """
     url = f'http://api.weatherapi.com/v1/current.json?key={api_key}&q=Kazan'
     # TODO: here can be exception -> need to catch it to avoid unexpected behaviour -> exit(1)
     try:
@@ -147,6 +165,17 @@ def weather_condition(precipitation: str) -> str:
 
 # TODO: Incorrect annotation of output type. json - it's a module name. Not type
 def get_response(message, api_url: str, bot: AsyncTeleBot) -> Any:
+    """
+    A function to make a GET request to the provided API URL and handle different response status codes.
+
+    Parameters:
+    - message: The message object to send responses to.
+    - api_url: The URL of the API to make the GET request to.
+    - bot: An AsyncTeleBot object to interact with Telegram for sending messages.
+
+    Returns:
+    - Any: The JSON response from the API if the status code is 200, otherwise appropriate error messages are sent to the user.
+    """
     try:
         response = requests.get(api_url)
         data = json.loads(response.text)
@@ -183,7 +212,12 @@ def get_response(message, api_url: str, bot: AsyncTeleBot) -> Any:
 
 
 def logging_config(LOG_LEVEL):
+    """
+    A function that configures logging based on the input log level.
 
+    :param LOG_LEVEL: The log level to set for the logging configuration.
+    :return: None
+    """
     numeric_level = getattr(logging, LOG_LEVEL)
     logging.basicConfig(level=numeric_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     log.info("Logging Configured")

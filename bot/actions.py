@@ -11,6 +11,16 @@ log = logging.getLogger(__name__)
 
 
 async def start_message(pool, message, bot, config):
+    """
+    Sends a welcome message to the user and initializes their state in the database.
+    Args:
+        pool: Connection pool to the database.
+        message: Message object containing user information.
+        bot: Bot object to send messages.
+        config: Configurations for the bot.
+    Returns:
+        None
+    """
     try:
         log.info("User %s started bot", message.from_user.first_name)
         msg = (
@@ -38,6 +48,13 @@ async def start_message(pool, message, bot, config):
 
 
 async def change_city(pool, message, bot):
+    """
+    Changes the city in the user state based on user input.
+    Args:
+        pool: The asyncpg Pool.
+        message: The message object containing chat information.
+        bot: The asynchronous Telegram bot instance.
+    """
     try:
         log.debug("User {message.chat.id} wants to change city")
         await bot.send_message(message.chat.id, 'Please enter the new city')
@@ -51,12 +68,27 @@ async def change_city(pool, message, bot):
 
 
 async def add_city(pool, message, bot, config):
+    """
+    Add a new city to the user's preferences based on the message received.
+
+    Parameters:
+    - pool: Database connection pool
+    - message: Message object containing the text and chat id
+    - bot: Bot object for sending messages
+    - config: Configuration object containing API key
+
+    Returns:
+    None
+    """
     try:
+        # Verify city
         log.debug("verify city")
         url = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={message.text}'
+
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 if response.status == 200:
+                    # Update user's city in the database
                     query = "UPDATE user_state SET city = $1 WHERE chat_id = $2"
                     await execute(pool, query, message.text, message.chat.id, fetch=True)
                     log.debug(f"User {message.chat.id} added new city: {message.text}")
@@ -91,6 +123,16 @@ async def help_message(message, bot):
 
 
 async def weather(message, bot, config, status_user):
+    """
+    Retrieves the current weather data for a specified city and sends a message with the weather information to the user.
+    Args:
+        message: The message object from the user.
+        bot: The bot object for sending messages.
+        config: The configuration object containing API_KEY.
+        status_user: User status containing the city for weather lookup.
+    Returns:
+        Log message indicating success or sends an error message to the user.
+    """
     try:
         log.debug(f"User requested current weather for': {status_user['city']}")
         url_current = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={status_user["city"]}'
@@ -120,6 +162,10 @@ async def weather(message, bot, config, status_user):
 
 
 async def weather_forecast(pool, message, bot):
+    """
+    This function sends a message to the user prompting to input a date range,
+    updates the database with the date difference, and logs the activity.
+    """
     try:
         today_date = date.today()
         max_date = today_date + timedelta(days=10)
@@ -135,6 +181,9 @@ async def weather_forecast(pool, message, bot):
 
 
 async def add_day(pool, message, bot, config):
+    """
+    Add a day to the date entered by the user and get the weather forecast for that day if it's within 10 days from today.
+    """
     try:
         today_date = date.today()
         input_date = datetime.strptime(message.text, "%Y-%m-%d").date()
@@ -155,6 +204,9 @@ async def add_day(pool, message, bot, config):
 
 
 async def get_weather_forecast(pool, date_difference, message, bot, config):
+    """
+    Retrieves weather forecast based on the date difference for the user's city.
+    """
     try:
         query = "SELECT city FROM user_state WHERE chat_id = $1"
         city = await execute(pool, query, message.chat.id, fetch=True)
@@ -187,6 +239,9 @@ async def get_weather_forecast(pool, date_difference, message, bot, config):
 
 async def forecast_for_several_days(pool, message, bot):
     try:
+        """
+        A function to send a weather forecast message for several days and update user state with the number of days.
+        """
         await bot.send_message(message.chat.id,
                                f'In this section, you can get the weather forecast for several days.\n'
                                f'Enter the number of days (from 1 to 10):')
@@ -200,6 +255,9 @@ async def forecast_for_several_days(pool, message, bot):
 
 
 async def get_forecast_several(pool, message, bot, config):
+    """
+    A function to get the weather forecast for several days based on user input.
+    """
     try:
         query = "SELECT city FROM user_state WHERE chat_id = $1"
         city = await execute(pool, query, message.chat.id, fetch=True)
@@ -248,6 +306,23 @@ async def get_forecast_several(pool, message, bot, config):
 
 
 async def statistic(pool, message, bot, config, status_user):
+    """
+    A function to retrieve weather statistics for a given city for the past week.
+
+    Parameters:
+    - pool: the connection pool
+    - message: the message object
+    - bot: the bot object for sending messages
+    - config: the configuration object
+    - status_user: the status of the user
+
+    Raises:
+    - Exception: if an error occurs during the process
+    - ValidationError: if there is a validation error
+
+    Returns:
+    - None
+    """
     try:
         today_date = date.today()
         log.debug(f"User requested weather statistic: {status_user['city']}")
@@ -277,6 +352,9 @@ async def statistic(pool, message, bot, config, status_user):
 
 
 async def prediction(pool, message, bot, config, status_user):
+    """
+    A function to make weather predictions based on historical data and forecast for a specific city.
+    """
     try:
         today_date = date.today()
         log.debug(f"User requested weather prediction: {status_user['city']}")

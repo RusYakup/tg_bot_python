@@ -27,12 +27,30 @@ log = logging.getLogger(__name__)
 @app.post("/tg_webhooks")
 async def tg_webhooks(request: Request, config: Annotated[Settings, Depends(get_settings)],
                       bot: AsyncTeleBot = Depends(get_bot), pool: Pool = Depends(create_pool)):
+    """
+    Handle incoming Telegram webhook requests.
+
+    Parameters:
+    - request: Request object containing the incoming request data
+    - config: Settings configuration
+    - bot: AsyncTeleBot instance for interacting with Telegram API
+    - pool: Pool object for database connection
+
+    Returns:
+    - HTTPException if there are errors in processing the request
+    """
+
+    # Get X-Telegram-Bot-Api-Secret-Token from headers
     x_telegram_bot_api_secret_token = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
+
+    # Check if the X-Telegram-Bot-Api-Secret-Token is correct
     if x_telegram_bot_api_secret_token == settings.SECRET_TOKEN_TG_WEBHOOK:
         if request.method == 'POST':
             try:
                 global global_pool
                 global_pool = pool
+
+                # Get the JSON data from the request body
                 json_string = await request.body()
             except json.decoder.JSONDecodeError:
                 log.error("Telegram webhook request body: JSONDecodeError")
@@ -40,6 +58,7 @@ async def tg_webhooks(request: Request, config: Annotated[Settings, Depends(get_
                 return HTTPException(status_code=400,
                                      detail="JSONDecodeError: An error occurred, please try again later")
             try:
+                # Decode the JSON data and create a Message object
                 json_dict = json.loads(json_string.decode())
                 json_dict['message']['from_user'] = json_dict['message'].pop('from')
                 message = Message(**json_dict['message'])
@@ -49,8 +68,11 @@ async def tg_webhooks(request: Request, config: Annotated[Settings, Depends(get_
                 return HTTPException(status_code=400,
                                      detail="ValidationError: An error occurred, please try again later")
             try:
+                # Check the chat ID and process the message accordingly
                 status_user = await check_chat_id(pool, message)
                 print(message)
+
+                # Check if user is waiting for a value to be entered
                 if "waiting_value" in status_user.values():
                     await check_waiting(status_user, pool, message, bot, config)
                 else:
@@ -67,16 +89,26 @@ async def tg_webhooks(request: Request, config: Annotated[Settings, Depends(get_
         return HTTPException(status_code=401, detail="Unauthorized")
 
 def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
+    """
+    Function to verify the provided credentials.
+    Args:
+        credentials (HTTPBasicCredentials): The credentials to be verified.
+    Returns:
+        HTTPBasicCredentials: The verified credentials if successful.
+    Raises:
+        HTTPException: If the credentials are incorrect.
+    """
     try:
         correct_username = settings.GET_USER
         correct_password = settings.GET_PASSWORD
+        # Check if the provided credentials match the correct username and password
         if credentials.username == correct_username and credentials.password == correct_password:
             log.info("Credentials verified successfully")
             return credentials
     except HTTPException as e:
         log.debug("An error occurred: %s", str(e))
         log.debug("Exception traceback", traceback.format_exc())
-        raise HTTPException(status_code=401, detail="Неверный логин или пароль")
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
 
 
 @app.get("/users_actions")
@@ -86,6 +118,20 @@ async def get_users_actions(chat_id: int,
                             limit: int = 1000,
                             credentials: HTTPBasicCredentials = Security(verify_credentials),
                             global_pool: Pool = Depends(create_pool)):
+    """
+      Retrieves user actions based on the provided criteria.
+      Args:
+          chat_id (int): The ID of the chat/user.
+          from_ts (int, optional): The starting timestamp. Defaults to None.
+          until_ts (int, optional): The ending timestamp. Defaults to None.
+          limit (int, optional): The maximum number of results to retrieve. Defaults to 1000.
+          credentials (HTTPBasicCredentials, optional): Security credentials. Defaults to Security(verify_credentials).
+          global_pool (Pool, optional): The global database connection pool. Defaults to Depends(create_pool).
+      Returns:
+          list: The list of user actions retrieved based on the criteria.
+      Raises:
+          HTTPException: If there is an unauthorized access or an error occurs during retrieval.
+      """
     try:
         if from_ts is not None and until_ts is not None:
             print("SELECT * FROM statistic WHERE chat_id = $1 AND ts >= $2 AND ts <= $3 ORDER BY ts DESC LIMIT $4")
@@ -114,6 +160,22 @@ async def get_actions_count(chat_id: int,
                             until_ts: int = None,
                             credentials: HTTPBasicCredentials = Security(verify_credentials),
                             global_pool: Pool = Depends(create_pool)):
+    """
+     Retrieves the count of actions based on the provided chat_id.
+
+     Args:
+         chat_id (int): The ID of the chat/user.
+         from_ts (int, optional): The starting timestamp. Defaults to None.
+         until_ts (int, optional): The ending timestamp. Defaults to None.
+         credentials (HTTPBasicCredentials, optional): Security credentials. Defaults to Security(verify_credentials).
+         global_pool (Pool, optional): The global database connection pool. Defaults to Depends(create_pool).
+
+     Returns:
+         dict: The count of actions based on the provided chat_id.
+
+     Raises:
+         HTTPException: If there is an unauthorized access or an error occurs during retrieval.
+     """
     query = "SELECT chat_id, DATE_TRUNC('month', to_timestamp(ts)) AS month, COUNT(*) AS actions_count FROM statistic WHERE chat_id = $1 GROUP BY chat_id, month"
     args = [chat_id]
     res = await execute(global_pool, query, *args, fetch=True)

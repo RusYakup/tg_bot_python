@@ -11,6 +11,14 @@ log = logging.getLogger(__name__)
 
 
 async def check_chat_id(pool: Pool, message):
+    """
+     Checks the chat_id in the user_state table, inserts if not present, and retrieves the data.
+     Args:
+         pool (Pool): The asyncpg Pool.
+         message: The message object containing chat information.
+     Returns:
+         dict: The user_state data for the given chat_id.
+     """
     try:
         query = "INSERT INTO user_state (chat_id, city, date_difference, qty_days) VALUES ($1, $2, $3, $4) ON CONFLICT (chat_id) DO NOTHING"
         args = [message.chat.id, "Moskva", "None", "None"]
@@ -27,11 +35,25 @@ async def check_chat_id(pool: Pool, message):
 
 
 async def check_waiting(status_user: dict, pool, message, bot: AsyncTeleBot, config: Settings):
+    """
+    Check the status of the user and perform actions based on the status.
+    Args:
+        status_user (dict): Dictionary containing user status information.
+        pool: The asyncpg Pool.
+        message: The message object containing chat information.
+        bot (AsyncTeleBot): The asynchronous Telegram bot instance.
+        config (Settings): The settings configuration.
+    Raises:
+        Exception: If an error occurs during the process.
+    """
     try:
         if status_user["city"] == "waiting_value":
             await add_city(pool, message, bot, config)
         if status_user["date_difference"] == "waiting_value":
             await add_day(pool, message, bot, config)
+            query_new = "UPDATE user_state SET date_difference = $1 WHERE chat_id = $2"
+            new_status = "None"
+            await execute(pool, query_new, new_status, message.chat.id, fetch=True)
         if status_user["qty_days"] == "waiting_value":
             await get_forecast_several(pool, message, bot, config)
             query_new = "UPDATE user_state SET qty_days = $1 WHERE chat_id = $2"
@@ -43,6 +65,16 @@ async def check_waiting(status_user: dict, pool, message, bot: AsyncTeleBot, con
 
 
 async def handlers(pool, message, bot, config, status_user):
+    """
+    This function handles different message commands and calls corresponding functions.
+
+    Args:
+        pool: The asyncpg Pool.
+        message: The message object containing chat information.
+        bot (AsyncTeleBot): The asynchronous Telegram bot instance.
+        config (Settings): The settings configuration.
+        status_user (dict): Dictionary containing user status information.
+    """
     try:
         if message.text == '/start':
             await start_message(pool, message, bot, config)
