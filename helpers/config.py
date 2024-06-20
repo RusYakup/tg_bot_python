@@ -2,8 +2,7 @@ from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from telebot.async_telebot import AsyncTeleBot
 import logging
-import traceback
-import asyncpg
+
 
 log = logging.getLogger(__name__)
 

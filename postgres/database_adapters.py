@@ -2,11 +2,37 @@ import asyncpg
 import logging
 import traceback
 from asyncpg import Connection
-from helpers.config import get_settings
+from fastapi.security import HTTPBasicCredentials,  HTTPBasic
+from fastapi import HTTPException, Depends
+from helpers.config import get_settings, Settings
+
 
 log = logging.getLogger(__name__)
 pool_cache = {}
+security = HTTPBasic()
 
+
+def verify_credentials(credentials: HTTPBasicCredentials = Depends(security), settings: Settings = Depends(get_settings)):
+    """
+    Function to verify the provided credentials.
+    Args:
+        credentials (HTTPBasicCredentials): The credentials to be verified.
+    Returns:
+        HTTPBasicCredentials: The verified credentials if successful.
+    Raises:
+        HTTPException: If the credentials are incorrect.
+    """
+    try:
+        correct_username = settings.GET_USER
+        correct_password = settings.GET_PASSWORD
+        # Check if the provided credentials match the correct username and password
+        if credentials.username == correct_username and credentials.password == correct_password:
+            log.info("Credentials verified successfully")
+            return credentials
+    except HTTPException as e:
+        log.debug("An error occurred: %s", str(e))
+        log.debug("Exception traceback", traceback.format_exc())
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
 
 async def create_pool(clear_cache: bool = False):
     """
