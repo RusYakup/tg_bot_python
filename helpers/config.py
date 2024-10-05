@@ -3,7 +3,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from telebot.async_telebot import AsyncTeleBot
 import logging
 
-
 log = logging.getLogger(__name__)
 
 
@@ -33,8 +32,3 @@ def get_bot() -> AsyncTeleBot:
     token = get_settings().TOKEN
     bot = AsyncTeleBot(token)
     return bot
-
-
-
-
-

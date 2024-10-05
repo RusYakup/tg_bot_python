@@ -9,7 +9,6 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 
-
 def check_bot_token(token: str) -> None:
     """
     A function to check the validity of a Telegram bot token by making a request to the Telegram API.
@@ -27,8 +26,8 @@ def check_bot_token(token: str) -> None:
         info = response.json()
         log.info("Token for Telegram bot verified: " + info['result']['username'])
     except requests.exceptions.RequestException as e:
-        log.error("Error verifying Telegram bot token")
-        log.debug(f"Exception: {e}")
+        log.critical("Error verifying Telegram bot token %s", token)
+        log.debug(f"Exception verifying Telegram bot token: {e}")
         sys.exit(1)
 
 
@@ -47,17 +46,17 @@ def check_api_key(api_key: str) -> None:
     try:
         response = requests.get(url)
         response.raise_for_status()
-        info = response.json()
+
         log.info("The API key is correct.")
     except requests.exceptions.RequestException as e:
-        log.error("Error verifying API key")
+        log.critical("Error verifying API key")
         log.debug(f"Exception: {e}")
         sys.exit(1)
     response = requests.get(url)
     if response.status_code == 200:
         log.info("The API key is correct.")
     else:
-        log.error("The API key is incorrect.")
+        log.critical("Error verifying API key: Status code " + str(response.status_code))
         log.debug(F"Exception traceback:\n", traceback.format_exc())
         sys.exit(1)
 
@@ -186,18 +185,17 @@ def get_response(message, api_url: str, bot: AsyncTeleBot) -> Any:
             error_code = data.get('error', {}).get('code')
             if error_code == 1006:
                 bot.send_message(message.chat.id, "City not found, please check the city name")
-                logging.error("City not found - Response 400: code 1006")
-                exit(1)
+                logging.error("City not found - Response 400: code 1006" + str(data.get('error', {}).get('message')))
             elif error_code == 9999:
                 bot.send_message(message.chat.id, "Server temporarily unavailable, please try again later")
-                logging.error("Server temporarily unavailable - Response 400: code 9999")
+                logging.error("Server temporarily unavailable - Response 400: code 9999" + str(data.get('error', {}).get('message')))
             elif error_code == 1005:
                 bot.send_message(message.chat.id, "Error in API request, please try again later")
-                logging.error("Invalid API request URL - Response 400: code 1005")
+                logging.error("Invalid API request URL - Response 400: code 1005 " + str(data.get('error', {}).get('message')))
             else:
-                logging.error("Unknown error - Response 400")
-                logging.error(traceback.format_exc())
-                bot.send_message(message.chat.id, "Unknown error")
+                logging.error("Unknown error - Response 400 code " + str(data.get('error', {}).get('message')))
+                log.debug(f"Exception traceback: \n {traceback.format_exc()}")
+                bot.send_message(message.chat.id, "Unknown error. Please try again later")
         elif response.status_code == 403:
             logging.error(f"Response 403: {data.get('error', {}).get('message')}")
             bot.send_message(message.chat.id, "Technical error occurred, please try again later or contact support")
@@ -206,20 +204,17 @@ def get_response(message, api_url: str, bot: AsyncTeleBot) -> Any:
             bot.send_message(message.chat.id, "Error retrieving weather data, please try again later")
     except Exception as e:
         bot.send_message(message.chat.id, "An error occurred")
-        logging.error(e)
-        logging.error(f"Exception:\n",traceback.format_exc())
+        logging.error("Error in get_response: " + str(e))
+        logging.debug(f"Exception:\n", traceback.format_exc())
 
 
-
-def logging_config(LOG_LEVEL):
+def logging_config(log_level: str) -> None:
     """
     A function that configures logging based on the input log level.
 
     :param LOG_LEVEL: The log level to set for the logging configuration.
     :return: None
     """
-    numeric_level = getattr(logging, LOG_LEVEL)
+    numeric_level = getattr(logging, log_level.upper())
     logging.basicConfig(level=numeric_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     log.info("Logging Configured")
-
-

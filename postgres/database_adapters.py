@@ -1,10 +1,10 @@
 import asyncpg
 import logging
 import traceback
-from asyncpg import Connection
-from fastapi.security import HTTPBasicCredentials,  HTTPBasic
+from fastapi.security import HTTPBasicCredentials, HTTPBasic
 from fastapi import HTTPException, Depends
 from helpers.config import get_settings, Settings
+from postgres.sqlfactory import update, where
 
 
 log = logging.getLogger(__name__)
@@ -12,11 +12,13 @@ pool_cache = {}
 security = HTTPBasic()
 
 
-def verify_credentials(credentials: HTTPBasicCredentials = Depends(security), settings: Settings = Depends(get_settings)):
+def verify_credentials(credentials: HTTPBasicCredentials = Depends(security),
+                       settings: Settings = Depends(get_settings)):
     """
     Function to verify the provided credentials.
     Args:
         credentials (HTTPBasicCredentials): The credentials to be verified.
+        settings (Settings): The application settings.
     Returns:
         HTTPBasicCredentials: The verified credentials if successful.
     Raises:
@@ -33,6 +35,7 @@ def verify_credentials(credentials: HTTPBasicCredentials = Depends(security), se
         log.debug("An error occurred: %s", str(e))
         log.debug("Exception traceback", traceback.format_exc())
         raise HTTPException(status_code=401, detail="Incorrect username or password")
+
 
 async def create_pool(clear_cache: bool = False):
     """
@@ -59,8 +62,8 @@ async def create_pool(clear_cache: bool = False):
 
             return pool
     except Exception as e:
-        log.error("Failed to connect to the database: %s", str(e))
-        log.error("Exception traceback:", traceback.format_exc())
+        log.error("Failed to connect to the database: %s", str(e) + dsn)
+        log.debug("Exception traceback:", traceback.format_exc() + dsn)
         exit(1)
 
 
@@ -104,6 +107,20 @@ async def create_table():
         log.error(f"An error occurred during table creation: {e}")
         log.error("Exception traceback:", traceback.format_exc())
         exit(1)  # Exit the program with error code 1
+
+
+async def execute_user_state_bd(bot, pool: asyncpg.Pool, message, field, new_state: str = "waiting_value"):
+    try:
+        update_sql = update("user_state", {f"{field}": "$1"})
+        conditions = {
+            "chat_id": ("=", message.chat.id),
+        }
+        query, args = where(update_sql, conditions, 2)
+        args.insert(0, new_state)
+        return f"{query}", *args
+    except Exception as e:
+        log.error(f"An error occurred during user state adding: {e}")
+        log.debug("Exception traceback:", traceback.format_exc())
 
 
 async def add_statistic_bd(pool: asyncpg.Pool, message):
@@ -158,21 +175,27 @@ async def execute(pool: asyncpg.Pool, query: str, *args,
     Returns:
         The result of the query based on the specified fetch method.
     """
-    async with pool.acquire() as connection:
-        connection: Connection
-        async with connection.transaction():
-            if fetch:
-                result = await connection.fetch(query, *args)
-                log.info("fetch command executed successfully")
-            elif fetchval:
-                result = await connection.fetchval(query, *args)
-                log.info("fetchval command executed successfully")
-            elif fetchrow:
-                result = await connection.fetchrow(query, *args)
-                log.info("fetchrow command executed successfully")
-            elif execute:
-                result = await connection.execute(query, *args)
-                log.info("execute command executed successfully")
-            else:
-                result = None
-    return result
+    try:
+        async with pool.acquire() as connection:
+            connection: asyncpg.Connection
+            async with connection.transaction():
+                if fetch:
+                    result = await connection.fetch(query, *args)
+                    log.info("fetch command executed successfully")
+                elif fetchval:
+                    result = await connection.fetchval(query, *args)
+                    log.info("fetchval command executed successfully")
+                elif fetchrow:
+                    result = await connection.fetchrow(query, *args)
+                    log.info("fetchrow command executed successfully")
+                elif execute:
+                    result = await connection.execute(query, *args)
+                    log.info("execute command executed successfully")
+                else:
+                    result = None
+        return result
+    except asyncpg.PostgresError as e:
+        log.error(f"Database error: {e}")
+    except Exception as e:
+        log.error(f"Unexpected error: {e}")
+    return None

@@ -1,6 +1,6 @@
 import traceback
 from helpers.helpers import check_bot_token, check_api_key, logging_config
-from handlers.web_hook_handler import set_webhook
+from handlers.set_webhook import set_webhook
 from postgres.database_adapters import create_table
 import uvicorn
 import asyncio
@@ -11,7 +11,6 @@ from handlers.web_hook_handler import app
 
 log = logging.getLogger(__name__)
 
-
 if __name__ == "__main__":
     try:
         settings = get_settings()
@@ -21,8 +20,7 @@ if __name__ == "__main__":
         set_webhook(settings.TOKEN, settings.APP_DOMAIN, settings.SECRET_TOKEN_TG_WEBHOOK)
         asyncio.run(create_table())
         uvicorn.run(app, host="0.0.0.0", port=8888)
-
     except Exception as e:
-        log.error(e)
-        log.error(f"Exception traceback:\n", traceback.format_exc())
+        log.critical("Error during startup: %s", str(e))
+        log.debug(f"Exception traceback:\n", traceback.format_exc())
         exit(1)

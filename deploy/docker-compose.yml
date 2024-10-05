@@ -28,9 +28,24 @@ services:
     command: http --domain=${APP_DOMAIN:?err} 8888
     network_mode: host
 
+  #  weather_bot:
+  #    image: sha256:ee4658d93c053ddf25c1adba0288fba945e14b466551f7bc7cb19ffb28e15098
+  #    container_name: weather_tg_bot
+  #    ports:
+  #      - "8888:8888"
+  #    environment:
+  #      - TOKEN=${TOKEN:?err}
+  #      - API_KEY=${API_KEY:?err}
+  #      - TG_BOT_API_URL=${TG_BOT_API_URL:?err}
+  #      - APP_DOMAIN=${APP_DOMAIN:?err}
+  #      - SECRET_TOKEN_TG_WEBHOOK=${SECRET_TOKEN_TG_WEBHOOK:?err}
+  #    #      - TOKEN=${TOKEN}
+  #    #      - API_KEY=${API_KEY}
+  #    restart: unless-stopped
+  # TODO: bot service will be added here
   weather_bot:
-    image: sha256:ee4658d93c053ddf25c1adba0288fba945e14b466551f7bc7cb19ffb28e15098
-    container_name: weather_tg_bot
+    build: ..
+    container_name: weather_tg_bot_build
     ports:
       - "8888:8888"
     environment:
@@ -42,21 +57,6 @@ services:
     #      - TOKEN=${TOKEN}
     #      - API_KEY=${API_KEY}
     restart: unless-stopped
-  # TODO: bot service will be added here
-#  weather_bot:
-#    build: ..
-#    container_name: weather_tg_bot
-#    ports:
-#      - "8888:8888"
-#    environment:
-#      - TOKEN=${TOKEN:?err}
-#      - API_KEY=${API_KEY:?err}
-#      - TG_BOT_API_URL=${TG_BOT_API_URL:?err}
-#      - APP_DOMAIN=${APP_DOMAIN:?err}
-#      - SECRET_TOKEN_TG_WEBHOOK=${SECRET_TOKEN_TG_WEBHOOK:?err}
-##      - TOKEN=${TOKEN}
-##      - API_KEY=${API_KEY}
-#    restart: unless-stopped
 
 
   postgres:
@@ -73,7 +73,7 @@ services:
     ports:
       - "5432:5432"
     networks:
-#      - internal
+      #      - internal
       - external
 
 # [ networks definition ]
