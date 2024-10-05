@@ -57,7 +57,7 @@ async def change_city(pool, message, bot):
         log.debug("User {message.chat.id} wants to change city")
         await bot.send_message(message.chat.id, 'Please enter the new city')
         query = await sql_update_user_state_bd(bot, pool, message, "city")
-        await execute(pool, *query, fetch=True)
+        # await execute(pool, *query, fetch=True)
         log.debug(f" User {message.chat.id} waiting_value: city")
     except Exception as e:
         log.error("An error occurred: %s", str(e))
@@ -86,7 +86,7 @@ async def add_city(pool, message, bot, config):
             async with session.get(url) as response:
                 if response.status == 200:
                     query = await sql_update_user_state_bd(bot, pool, message, "city", message.text)
-                    await execute(pool, *query, fetch=True)
+                    # await execute(pool, *query, fetch=True)
                     log.debug(f"User {message.chat.id} added new city: {message.text}")
                     await bot.send_message(message.chat.id, 'City added successfully. Select the next command.')
                 else:
@@ -114,7 +114,7 @@ async def help_message(message, bot):
         await bot.send_message(message.chat.id, full_msg)
     except Exception as e:
         log.error("An error occurred: %s", str(e))
-        log.debug(f"Exeption traceback: \n {traceback.format_exc()}")
+        log.debug(f"Exception traceback: \n {traceback.format_exc()}")
         await bot.send_message(message.chat.id, 'An error occurred. Please try again later.')
 
 
@@ -170,7 +170,7 @@ async def weather_forecast(pool, message, bot):
         # query = "UPDATE user_state SET date_difference = $1 WHERE chat_id = $2"
         # await execute(pool, query, 'waiting_value', message.chat.id, fetch=True)
         query = await sql_update_user_state_bd(bot, pool, message, "date_difference", "waiting_value")
-        await execute(pool, *query, fetch=True)
+        # await execute(pool, *query, fetch=True)
 
         log.info(f" User {message.chat.id} waiting_value: city")
     except Exception as e:
@@ -227,7 +227,7 @@ async def get_weather_forecast(pool, date_difference, message, bot, config):
             f"{weather_data.forecast.forecastday[correction_num].day.condition.text}")
         await bot.send_message(message.chat.id, forecast_msg)
         query = await sql_update_user_state_bd(bot, pool, message, "date_difference", "None")
-        await execute(pool, *query, fetch=True)
+        # await execute(pool, *query, fetch=True)
         log.info(f"weather_forecast: Success")
     except Exception as e:
         log.error("An error occurred: %s", str(e))
@@ -248,7 +248,7 @@ async def forecast_for_several_days(pool, message, bot):
                                f'In this section, you can get the weather forecast for several days.\n'
                                f'Enter the number of days (from 1 to 10):')
         query = await sql_update_user_state_bd(bot, pool, message, "qty_days")
-        await execute(pool, *query, fetch=True)
+        # await execute(pool, *query, fetch=True)
     except Exception as e:
         log.debug("An error occurred: %s", str(e))
         log.debug(f"Exception traceback: \n {traceback.format_exc()}")

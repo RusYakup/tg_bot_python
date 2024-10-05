@@ -53,11 +53,11 @@ async def check_waiting(status_user: dict, pool, message, bot: AsyncTeleBot, con
         if status_user["date_difference"] == "waiting_value":
             await add_day(pool, message, bot, config)
             query = await sql_update_user_state_bd(bot, pool, message, "date_difference", "None")
-            await execute(pool, *query, fetch=True)
+            # await execute(pool, *query, fetch=True)
         if status_user["qty_days"] == "waiting_value":
             await get_forecast_several(pool, message, bot, config)
             query = await sql_update_user_state_bd(bot, pool, message, "qty_days", "None")
-            await execute(pool, *query, fetch=True)
+            # await execute(pool, *query, fetch=True)
 
 
     except Exception as e:

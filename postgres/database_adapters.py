@@ -117,6 +117,8 @@ async def sql_update_user_state_bd(bot, pool: asyncpg.Pool, message, field, new_
         }
         query, args = where(update_sql, conditions, 2)
         args.insert(0, new_state)
+
+        await execute(pool, query, *args, fetch=True)
         return f"{query}", *args
     except Exception as e:
         log.error(f"An error occurred during user state adding: {e}")
