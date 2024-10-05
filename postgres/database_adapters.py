@@ -109,7 +109,7 @@ async def create_table():
         exit(1)  # Exit the program with error code 1
 
 
-async def execute_user_state_bd(bot, pool: asyncpg.Pool, message, field, new_state: str = "waiting_value"):
+async def sql_update_user_state_bd(bot, pool: asyncpg.Pool, message, field, new_state: str = "waiting_value"):
     try:
         update_sql = update("user_state", {f"{field}": "$1"})
         conditions = {
