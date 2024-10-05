@@ -1,6 +1,6 @@
 from bot.actions import (add_city, start_message, change_city, weather, weather_forecast,
                          help_message, add_day, forecast_for_several_days, get_forecast_several, statistic, prediction)
-from helpers.config import Settings
+from config.config import Settings
 from telebot.async_telebot import AsyncTeleBot
 import logging
 import traceback

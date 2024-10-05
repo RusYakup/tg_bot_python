@@ -1,11 +1,11 @@
 import traceback
 from helpers.helpers import check_bot_token, check_api_key, logging_config
-from handlers.set_webhook import set_webhook
+from helpers.set_webhook import set_webhook
 from postgres.database_adapters import create_table
 import uvicorn
 import asyncio
 import logging
-from helpers.config import get_settings
+from config.config import get_settings
 from handlers.web_hook_handler import app
 
 

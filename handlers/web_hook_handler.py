@@ -2,14 +2,14 @@ import logging
 import traceback
 from telebot.async_telebot import AsyncTeleBot
 from asyncpg.pool import Pool
-from helpers.config import get_settings, Settings, get_bot
+from config.config import get_settings, Settings, get_bot
 import json
 from helpers.model_message import Message
 from postgres.database_adapters import create_pool
 from helpers.check_values import check_chat_id, check_waiting, handlers
 from pydantic import ValidationError
 from typing import Annotated
-from fastapi import FastAPI, Request, HTTPException, Depends, Security
+from fastapi import FastAPI, Request, HTTPException, Depends
 from handlers.db_handlers import router as db_handlers_router
 
 

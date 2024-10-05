@@ -3,7 +3,7 @@ import logging
 import traceback
 from fastapi.security import HTTPBasicCredentials, HTTPBasic
 from fastapi import HTTPException, Depends
-from helpers.config import get_settings, Settings
+from config.config import get_settings, Settings
 from postgres.sqlfactory import update, where
 
 
