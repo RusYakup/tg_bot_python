@@ -60,8 +60,6 @@ async def get_users_actions(chat_id: int = None,
 
 @router.get("/actions_count")
 async def get_actions_count(chat_id: int,
-                            from_ts: int = None,
-                            until_ts: int = None,
                             credentials: HTTPBasicCredentials = Security(verify_credentials),
                             pool: Pool = Depends(create_pool)):
     """
@@ -69,8 +67,6 @@ async def get_actions_count(chat_id: int,
 
      Args:
          chat_id (int): The ID of the chat/user.
-         from_ts (int, optional): The starting timestamp. Defaults to None.
-         until_ts (int, optional): The ending timestamp. Defaults to None.
          credentials (HTTPBasicCredentials, optional): Security credentials. Defaults to Security(verify_credentials).
          pool (Pool, optional): The global database connection pool. Defaults to Depends(create_pool).
 
