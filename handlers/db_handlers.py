@@ -37,42 +37,21 @@ async def get_users_actions(chat_id: int = None,
       """
 
     try:
-        if from_ts is not None and until_ts is not None:
-            sql_select = select("statistic")
-            conditions = {
-                "chat_id": ("=", chat_id),
-                "ts": ("<", from_ts),
-                "ts": (">", until_ts),
-            }
-            query, args = where(sql_select, conditions)
-            sql_order_by = order_by(query, "ts", "DESC")
-            sql_limit = limit(sql_order_by, limits, args)
-            query, args = sql_limit
-            res = await execute(pool, query, *args, fetch=True)
-            return res
-        elif from_ts is not None:
-            sql_select = select("statistic")
-            conditions = {
-                "chat_id": ("=", chat_id),
-                "ts": ("<", from_ts),
-            }
-            query, args = where(sql_select, conditions)
-            sql_order_by = order_by(query, "ts", "DESC")
-            sql_limit = limit(sql_order_by, limits, args)
-            query, args = sql_limit
-            res = await execute(pool, query, *args, fetch=True)
-            return res
-        elif chat_id is not None:
-            sql_select = select("statistic")
-            sql_where = where(sql_select, {"chat_id": ("=", chat_id)})
-            query, args = sql_where
-            res = await execute(pool, query, *args, fetch=True)
-            return res
-        else:
-            sql_select = select("statistic", ["DISTINCT ON (chat_id) *"])  ######
-            sql_order = order_by(sql_select, "chat_id", "DESC")
-            res = await execute(pool, sql_order, fetch=True)
-            return res
+        conditions = {}
+        if chat_id is not None:
+            conditions["chat_id"] = ("=", chat_id)
+        if from_ts is not None:
+            conditions["ts"] = (">", from_ts)
+        if until_ts is not None:
+            conditions["ts"] = ("<", until_ts)
+
+        sql_select = select("statistic")
+        query, args = where(sql_select, conditions)
+        query = order_by(query, "ts", "DESC")
+        query, args = limit(query, limits, args)
+
+        res = await execute(pool, query, *args, fetch=True)
+        return res
 
     except Exception as e:
         log.error("An error occurred: %s", str(e))
