@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     POSTGRES_DB: str
     GET_USER: str
     GET_PASSWORD: str
+    GF_SECURITY_ADMIN_USER: str = "ADMIN_GF"
+    GF_SECURITY_ADMIN_PASSWORD: str = "ADMIN_GF"
 
     model_config = SettingsConfigDict(env_file="../.env")
 

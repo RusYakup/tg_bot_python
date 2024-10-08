@@ -57,6 +57,9 @@ services:
     #      - TOKEN=${TOKEN}
     #      - API_KEY=${API_KEY}
     restart: unless-stopped
+    networks:
+      #- internal
+      - external
 
 
   postgres:
@@ -73,8 +76,36 @@ services:
     ports:
       - "5432:5432"
     networks:
-      #      - internal
+      #- internal
       - external
+    <<: *logging
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: unless-stopped
+    networks:
+      #- internal
+      - external
+    <<: *logging
+
+  grafana:
+    image: grafana/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:?err}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:?err}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - external
+    <<: *logging
+
 
 # [ networks definition ]
 networks:

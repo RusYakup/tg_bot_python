@@ -7,12 +7,15 @@ import asyncio
 import logging
 from config.config import get_settings
 from handlers.web_hook_handler import app
+from prometheus_fastapi_instrumentator import Instrumentator
 
 
 log = logging.getLogger(__name__)
 
+
 if __name__ == "__main__":
     try:
+        #Instrumentator().instrument(app).expose(app)
         settings = get_settings()
         logging_config(settings.LOG_LEVEL)
         check_bot_token(settings.TOKEN)

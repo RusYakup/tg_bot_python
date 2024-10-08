@@ -11,38 +11,13 @@ from pydantic import ValidationError
 from typing import Annotated
 from fastapi import FastAPI, Request, HTTPException, Depends
 from handlers.db_handlers import router as db_handlers_router
-
+from prometheus_fastapi_instrumentator import Instrumentator
 
 log = logging.getLogger(__name__)
 app = FastAPI()
 app.include_router(db_handlers_router)
-
+instrumentator = Instrumentator().instrument(app).expose(app, include_in_schema=False, should_gzip=True)
 #
-# def set_webhook(token: str, ngrok: str, secret_token: str) -> None:
-#     """
-#     Sets up a webhook for the Telegram bot using the provided tokens.
-#     Parameters:
-#         token (str): The Telegram bot token.
-#         ngrok (str): The ngrok URL.
-#         secret_token (str): The secret token for the webhook.
-#     Raises:
-#         SystemExit: If the webhook setup fails.
-#     Returns:
-#         None
-#     """
-#     try:
-#         webhook_url = f'https://api.telegram.org/bot{token}/setWebhook?url={ngrok}/tg_webhooks&secret_token={secret_token}'
-#         response = requests.post(webhook_url)
-#         if response.status_code == 200:
-#             log.info('Webhook setup successful')
-#             return
-#         else:
-#             log.critical('Webhook setup failed: %s' + webhook_url + str(response.status_code))
-#             sys.exit(1)
-#     except Exception as e:
-#         log.critical(f'Webhook setup failed :\n{e}')
-#         log.debug(F"Exception traceback:\n", traceback.format_exc())
-#         sys.exit(1)
 
 @app.post("/tg_webhooks")
 async def tg_webhooks(request: Request, config: Annotated[Settings, Depends(get_settings)],

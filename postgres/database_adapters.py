@@ -51,7 +51,7 @@ async def create_pool(clear_cache: bool = False):
         if clear_cache:
             pool_cache.clear()
         else:
-            dsn = f"postgresql://{get_settings().POSTGRES_USER}:{get_settings().POSTGRES_PASSWORD}@localhost/{get_settings().POSTGRES_DB}"
+            dsn = f"postgresql://{get_settings().POSTGRES_USER}:{get_settings().POSTGRES_PASSWORD}@postgres/{get_settings().POSTGRES_DB}"
             if dsn in pool_cache:
                 return pool_cache[dsn]
 
