@@ -5,23 +5,23 @@ from asyncpg.pool import Pool
 from config.config import get_settings, Settings, get_bot
 import json
 from helpers.model_message import Message
-from postgres.database_adapters import create_pool
 from helpers.check_values import check_chat_id, check_waiting, handlers
 from pydantic import ValidationError
 from typing import Annotated
-from fastapi import FastAPI, Request, HTTPException, Depends
-from handlers.db_handlers import router as db_handlers_router
-from prometheus_fastapi_instrumentator import Instrumentator
+from fastapi import Request, HTTPException, Depends, APIRouter
+from postgres.pool import get_db_pool
+
+
 
 log = logging.getLogger(__name__)
-app = FastAPI()
-app.include_router(db_handlers_router)
-instrumentator = Instrumentator().instrument(app).expose(app, include_in_schema=False, should_gzip=True)
-#
 
-@app.post("/tg_webhooks")
+
+webhook_router = APIRouter()
+
+
+@webhook_router.post("/tg_webhooks")
 async def tg_webhooks(request: Request, config: Annotated[Settings, Depends(get_settings)],
-                      bot: AsyncTeleBot = Depends(get_bot), pool: Pool = Depends(create_pool)):
+                      bot: AsyncTeleBot = Depends(get_bot), pool: Pool = Depends(get_db_pool)):
     """
     Handle incoming Telegram webhook requests.
 

@@ -1,26 +1,25 @@
 import traceback
-from asyncpg.pool import Pool
-from postgres.database_adapters import create_pool
 from fastapi import APIRouter, Depends, Security
 from postgres.database_adapters import verify_credentials
 from fastapi.security import HTTPBasicCredentials
 from postgres.database_adapters import execute
 from postgres.sqlfactory import select, update, where, limit, order_by
 import logging
-
+from asyncpg import Pool
+from postgres.pool import get_db_pool
 
 log = logging.getLogger(__name__)
-router = APIRouter()
+bd_router = APIRouter()
 
 
 
-@router.get("/users_actions")
+@bd_router.get("/users_actions")
 async def get_users_actions(chat_id: int = None,
                             from_ts: int = None,
                             until_ts: int = None,
                             limits: int = 1000,
                             credentials: HTTPBasicCredentials = Security(verify_credentials),
-                            pool: Pool = Depends(create_pool)):
+                            pool: Pool = Depends(get_db_pool)):
     """
       Retrieves user actions based on the provided criteria.
       Args:
@@ -58,10 +57,10 @@ async def get_users_actions(chat_id: int = None,
         log.debug(f"Exception traceback:\n{traceback.format_exc()}")
 
 
-@router.get("/actions_count")
+@bd_router.get("/actions_count")
 async def get_actions_count(chat_id: int,
                             credentials: HTTPBasicCredentials = Security(verify_credentials),
-                            pool: Pool = Depends(create_pool)):
+                            pool: Pool = Depends(get_db_pool)):
     """
      Retrieves the count of actions based on the provided chat_id.
 

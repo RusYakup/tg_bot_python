@@ -4,7 +4,10 @@ import traceback
 from fastapi.security import HTTPBasicCredentials, HTTPBasic
 from fastapi import HTTPException, Depends
 from config.config import get_settings, Settings
+#from postgres.pool import DbPool
 from postgres.sqlfactory import update, where
+from asyncpg import Pool
+from postgres.pool import get_db_pool
 
 
 log = logging.getLogger(__name__)
@@ -37,37 +40,10 @@ def verify_credentials(credentials: HTTPBasicCredentials = Depends(security),
         raise HTTPException(status_code=401, detail="Incorrect username or password")
 
 
-async def create_pool(clear_cache: bool = False):
-    """
-    Creates a connection pool to a PostgreSQL database.
-
-    Args:
-        clear_cache (bool): A flag indicating whether to clear the pool cache.
-
-    Returns:
-        asyncpg.pool.Pool: The connection pool to the database.
-    """
-    try:
-        if clear_cache:
-            pool_cache.clear()
-        else:
-            dsn = f"postgresql://{get_settings().POSTGRES_USER}:{get_settings().POSTGRES_PASSWORD}@postgres/{get_settings().POSTGRES_DB}"
-            if dsn in pool_cache:
-                return pool_cache[dsn]
-
-            pool = await asyncpg.create_pool(dsn=dsn, min_size=3, max_size=100, max_inactive_connection_lifetime=60,
-                                             max_queries=1000)
-            pool_cache[dsn] = pool
-            log.info("Successfully connected to the database: %s", dsn)
-
-            return pool
-    except Exception as e:
-        log.error("Failed to connect to the database: %s", str(e) + dsn)
-        log.debug("Exception traceback:", traceback.format_exc() + dsn)
-        exit(1)
+#
 
 
-async def create_table():
+async def create_table(pool: Pool = Depends(get_db_pool)):
     """
     This function creates two tables: user_state and statistic.
     """
@@ -92,16 +68,12 @@ async def create_table():
         );
     """
 
-    pool = await create_pool()
-
     try:
         async with pool.acquire() as connection:
             async with connection.transaction():
                 await connection.execute(create_user_state_table)  # Execute user_state table creation
                 await connection.execute(create_statistic_table)  # Execute statistic table creation
 
-        await pool.close()  # Close the connection pool
-        await create_pool(clear_cache=True)  # Recreate the connection pool to clear the cache
         log.info("Tables created successfully")
     except Exception as e:
         log.error(f"An error occurred during table creation: {e}")
@@ -197,7 +169,7 @@ async def execute(pool: asyncpg.Pool, query: str, *args,
                     result = None
         return result
     except asyncpg.PostgresError as e:
-        log.error(f"Database error: {e}")
+        log.error(f"Database error: {e} {traceback.format_exc()}")
     except Exception as e:
-        log.error(f"Unexpected error: {e}")
+        log.error(f"Unexpected error: {e} {traceback.format_exc()}")
     return None

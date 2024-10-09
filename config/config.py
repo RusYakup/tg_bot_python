@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     GET_PASSWORD: str
     GF_SECURITY_ADMIN_USER: str = "ADMIN_GF"
     GF_SECURITY_ADMIN_PASSWORD: str = "ADMIN_GF"
+    POOL_DB: str = "localhost"
 
     model_config = SettingsConfigDict(env_file="../.env")
 
