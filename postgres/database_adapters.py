@@ -1,17 +1,15 @@
+
 import asyncpg
 import logging
 import traceback
 from fastapi.security import HTTPBasicCredentials, HTTPBasic
 from fastapi import HTTPException, Depends
 from config.config import get_settings, Settings
-#from postgres.pool import DbPool
-from postgres.sqlfactory import update, where
+from postgres.sqlfactory import update, where, insert, select
 from asyncpg import Pool
-from postgres.pool import get_db_pool
-
+from postgres.pool import DbPool
 
 log = logging.getLogger(__name__)
-pool_cache = {}
 security = HTTPBasic()
 
 
@@ -43,7 +41,7 @@ def verify_credentials(credentials: HTTPBasicCredentials = Depends(security),
 #
 
 
-async def create_table(pool: Pool = Depends(get_db_pool)):
+async def create_table(pool: Pool = Depends(DbPool.get_pool)):
     """
     This function creates two tables: user_state and statistic.
     """
@@ -77,22 +75,24 @@ async def create_table(pool: Pool = Depends(get_db_pool)):
         log.info("Tables created successfully")
     except Exception as e:
         log.error(f"An error occurred during table creation: {e}")
-        log.error("Exception traceback:", traceback.format_exc())
+        log.debug("Exception traceback:", traceback.format_exc())
         exit(1)  # Exit the program with error code 1
 
 
-async def sql_update_user_state_bd(bot, pool: asyncpg.Pool, message, field, new_state: str = "waiting_value"):
+async def sql_update_user_state_bd(bot, pool: asyncpg.Pool, message, fields, new_state: str = "waiting_value"):
     try:
-        update_sql = update("user_state", {f"{field}": "$1"})
+        # query = "UPDATE user_state SET city = $1 WHERE chat_id = $2"
+        update_query, args = update("user_state", {fields: new_state})
+
         conditions = {
             "chat_id": ("=", message.chat.id),
         }
-        query, args = where(update_sql, conditions, 2)
-        args.insert(0, new_state)
-
-        await execute(pool, query, *args, fetch=True)
-        return f"{query}", *args
+        query_where, args_where = where(update_query, conditions)
+        args += args_where
+        await execute(pool, query_where, *args, fetch=True)
+        log.info(f"User {message.chat.id} {fields} updated successfully")
     except Exception as e:
+        await bot.send_message(message.chat.id, "An error occurred. Please try again later.")
         log.error(f"An error occurred during user state adding: {e}")
         log.debug("Exception traceback:", traceback.format_exc())
 
@@ -117,9 +117,10 @@ async def add_statistic_bd(pool: asyncpg.Pool, message):
                    "/forecast_for_several_days", "/weather_statistic", "/prediction"]
 
         if message.text in command:
-            query = "INSERT INTO statistic (ts, user_name, chat_id, action) VALUES ($1, $2, $3, $4)"
-            args = [message.date, message.from_user.first_name, message.chat.id, message.text]
-            await execute(pool, query, *args, fetch=True)
+            fields = {"ts": message.date, "user_name": message.from_user.first_name, "chat_id": message.chat.id,
+                      "action": message.text}
+            sql, args = insert("statistic", fields)
+            await execute(pool, sql, *args, fetch=True)
             log.debug("Statistic added successfully")
             return
         else:
@@ -171,5 +172,7 @@ async def execute(pool: asyncpg.Pool, query: str, *args,
     except asyncpg.PostgresError as e:
         log.error(f"Database error: {e} {traceback.format_exc()}")
     except Exception as e:
-        log.error(f"Unexpected error: {e} {traceback.format_exc()}")
+        log.error(f"Unexpected error: {e} {traceback.format_exc()} {query} {args}")
     return None
+
+#

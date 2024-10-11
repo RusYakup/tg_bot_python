@@ -2,7 +2,8 @@ import traceback
 import uvicorn
 import logging
 import asyncio
-from config.startup import startup
+import sys
+from src.startup import startup
 from postgres.pool import DbPool
 from handlers.db_handlers import bd_router
 from handlers.web_hook_handler import webhook_router
@@ -16,11 +17,21 @@ log = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await DbPool.create_pool()
     try:
+        await DbPool.create_pool()
+        pool = DbPool.get_pool()
+        if not pool:
+            log.error("Failed to create database connection pool")
+            sys.exit(1)
         yield
+    except Exception as e:
+        log.error(f"An unexpected error occurred: {e}")
+        sys.exit(1)
     finally:
-        await DbPool.close_pool()
+        try:
+            await DbPool.close_pool()
+        except Exception as e:
+            log.error(f"An error occurred while closing the database connection pool: {e}")
 
 
 app = FastAPI(lifespan=lifespan)

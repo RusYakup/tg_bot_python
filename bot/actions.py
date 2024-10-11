@@ -56,12 +56,12 @@ async def change_city(pool, message, bot):
     try:
         log.debug("User {message.chat.id} wants to change city")
         await bot.send_message(message.chat.id, 'Please enter the new city')
-        query = await sql_update_user_state_bd(bot, pool, message, "city")
-        # await execute(pool, *query, fetch=True)
+        # query = "UPDATE user_state SET city = $1 WHERE chat_id = $2"
+        await sql_update_user_state_bd(bot, pool, message, "city")
         log.debug(f" User {message.chat.id} waiting_value: city")
     except Exception as e:
         log.error("An error occurred: %s", str(e))
-        log.debug(f"Exeption traceback: \n {traceback.format_exc()}")
+        log.debug(traceback.format_exc())
         await bot.send_message(message.chat.id, 'An error occurred. Please try again later.')
 
 
@@ -85,8 +85,7 @@ async def add_city(pool, message, bot, config):
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 if response.status == 200:
-                    query = await sql_update_user_state_bd(bot, pool, message, "city", message.text)
-                    # await execute(pool, *query, fetch=True)
+                    await sql_update_user_state_bd(bot, pool, message, "city", message.text)
                     log.debug(f"User {message.chat.id} added new city: {message.text}")
                     await bot.send_message(message.chat.id, 'City added successfully. Select the next command.')
                 else:
@@ -130,6 +129,7 @@ async def weather(message, bot, config, status_user):
         Log message indicating success or sends an error message to the user.
     """
     try:
+
         log.debug(f"User requested current weather for': {status_user['city']}")
         url_current = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={status_user["city"]}'
         data = get_response(message, url_current, bot)
@@ -167,10 +167,7 @@ async def weather_forecast(pool, message, bot):
         max_date = today_date + timedelta(days=10)
         await bot.send_message(message.chat.id,
                                f'Input the date from {today_date} до {max_date}:')
-        # query = "UPDATE user_state SET date_difference = $1 WHERE chat_id = $2"
-        # await execute(pool, query, 'waiting_value', message.chat.id, fetch=True)
-        query = await sql_update_user_state_bd(bot, pool, message, "date_difference", "waiting_value")
-        # await execute(pool, *query, fetch=True)
+        await sql_update_user_state_bd(bot, pool, message, "date_difference", "waiting_value")
 
         log.info(f" User {message.chat.id} waiting_value: city")
     except Exception as e:
@@ -179,7 +176,7 @@ async def weather_forecast(pool, message, bot):
         await bot.send_message(message.chat.id, 'An error occurred. Please try again later.')
 
 
-async def add_day(pool, message, bot, config):
+async def add_day(pool, message, bot, config, status_user):
     """
     Add a day to the date entered by the user and get the weather forecast for that day if it's within 10 days from today.
     """
@@ -188,7 +185,7 @@ async def add_day(pool, message, bot, config):
         input_date = datetime.strptime(message.text, "%Y-%m-%d").date()
         if (input_date - today_date).days <= 10:
             date_difference = (input_date - today_date).days + 2
-            await get_weather_forecast(pool, date_difference, message, bot, config)
+            await get_weather_forecast(pool, date_difference, message, bot, config, status_user)
         else:
             max_date = today_date + timedelta(days=10)
             await bot.send_message(message.chat.id, f'The entered date must be no later than {max_date}.')
@@ -202,19 +199,14 @@ async def add_day(pool, message, bot, config):
         log.debug(f"User input (weather_forecast): {message.text}")
 
 
-async def get_weather_forecast(pool, date_difference, message, bot, config):
+async def get_weather_forecast(pool, date_difference, message, bot, config, status_user):
     """
     Retrieves weather forecast based on the date difference for the user's city.
     """
     try:
-
-        sql_select = select("user_state", "city")
-        query, args = where(sql_select, {"chat_id": ("=", message.chat.id)}, 1)
-        execute_city = await execute(pool, query, *args, fetch=True)
-        city = execute_city[0][0]
         log.debug(
             f"User requested weather forecast {date_difference} days")
-        url_forecast = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={city}&days={date_difference}&aqi=no&alerts=no'
+        url_forecast = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={status_user["city"]}&days={date_difference}&aqi=no&alerts=no'
         data = get_response(message, url_forecast, bot)
         weather_data = WeatherData.parse_obj(data)
         correction_num = int(date_difference) - 2
@@ -247,7 +239,8 @@ async def forecast_for_several_days(pool, message, bot):
         await bot.send_message(message.chat.id,
                                f'In this section, you can get the weather forecast for several days.\n'
                                f'Enter the number of days (from 1 to 10):')
-        query = await sql_update_user_state_bd(bot, pool, message, "qty_days")
+        await sql_update_user_state_bd(bot, pool, message, "qty_days")
+        print(message.text)
         # await execute(pool, *query, fetch=True)
     except Exception as e:
         log.debug("An error occurred: %s", str(e))
@@ -256,26 +249,20 @@ async def forecast_for_several_days(pool, message, bot):
         return
 
 
-async def get_forecast_several(pool, message, bot, config):
+async def get_forecast_several(pool, message, bot, config, status_user):
     """
     A function to get the weather forecast for several days based on user input.
     """
     try:
-        # query = "SELECT city FROM user_state WHERE chat_id = $1"
-        # city = await execute(pool, query, message.chat.id, fetch=True)
-        sql_select = select("user_state", fields=["city"])
-        query, args = where(sql_select, {"chat_id": ("=", message.chat.id)}, 1)
-        execute_city = await execute(pool, query, *args, fetch=True)
-        city = execute_city[0][0]
         qty_days = int(message.text)
-        log.debug(f"User requested weather forecast {qty_days} days: {city}")
+        log.debug(f"User requested weather forecast {qty_days} days: {status_user['city']}")
         if 1 <= qty_days <= 10:
             qty_days += 1
         else:
             await bot.send_message(message.chat.id, 'Number of days must be from 1 to 10')
             return
     except ValueError:
-        await bot.send_message(message.chat.id, 'Invalid input format please try again.')
+        await bot.send_message(message.chat.id, f'Invalid input format please try again. {message.text}')
         log.error("forecast_for_several_days: Invalid input format" + message.text)
         return
     except Exception as e:
@@ -284,7 +271,7 @@ async def get_forecast_several(pool, message, bot, config):
         return
 
     url_forecast_several = (f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&'
-                            f'q={city}&days={qty_days}&aqi=no&alerts=no')
+                            f'q={status_user["city"]}&days={qty_days}&aqi=no&alerts=no')
     try:
         data = get_response(message, url_forecast_several, bot)
         weather_data = WeatherData.parse_obj(data)
@@ -335,7 +322,6 @@ async def statistic(pool, message, bot, config, status_user):
     try:
         today_date = date.today()
         log.debug(f"User requested weather statistic: {status_user['city']}")
-        print(status_user)
         for days in range(1, 8):
             #  TODO: duplication of code
             statistic_date = today_date - timedelta(days=days)

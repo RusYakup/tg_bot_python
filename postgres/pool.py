@@ -37,6 +37,6 @@ class DbPool:
 
 
 
-async def get_db_pool() -> Pool:
-    pool = await DbPool.get_pool()
-    return pool
+# async def get_db_pool() -> Pool:
+#     pool = await DbPool.get_pool()
+#     return pool

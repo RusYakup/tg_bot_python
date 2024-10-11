@@ -4,9 +4,11 @@ from postgres.database_adapters import verify_credentials
 from fastapi.security import HTTPBasicCredentials
 from postgres.database_adapters import execute
 from postgres.sqlfactory import select, update, where, limit, order_by
+from handlers.db_actions import execute_actions_count, execute_users_actions
 import logging
 from asyncpg import Pool
-from postgres.pool import get_db_pool
+from postgres.pool import DbPool
+from fastapi import HTTPException
 
 log = logging.getLogger(__name__)
 bd_router = APIRouter()
@@ -14,12 +16,12 @@ bd_router = APIRouter()
 
 
 @bd_router.get("/users_actions")
-async def get_users_actions(chat_id: int = None,
+async def ex_users_actions(chat_id: int = None,
                             from_ts: int = None,
                             until_ts: int = None,
                             limits: int = 1000,
                             credentials: HTTPBasicCredentials = Security(verify_credentials),
-                            pool: Pool = Depends(get_db_pool)):
+                            pool: Pool = Depends(DbPool.get_pool)):
     """
       Retrieves user actions based on the provided criteria.
       Args:
@@ -36,31 +38,18 @@ async def get_users_actions(chat_id: int = None,
       """
 
     try:
-        conditions = {}
-        if chat_id is not None:
-            conditions["chat_id"] = ("=", chat_id)
-        if from_ts is not None:
-            conditions["ts"] = (">", from_ts)
-        if until_ts is not None:
-            conditions["ts"] = ("<", until_ts)
-
-        sql_select = select("statistic")
-        query, args = where(sql_select, conditions)
-        query = order_by(query, "ts", "DESC")
-        query, args = limit(query, limits, args)
-
-        res = await execute(pool, query, *args, fetch=True)
+        res = await execute_users_actions(pool, chat_id, from_ts, until_ts, limits)
         return res
-
     except Exception as e:
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback:\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 @bd_router.get("/actions_count")
 async def get_actions_count(chat_id: int,
                             credentials: HTTPBasicCredentials = Security(verify_credentials),
-                            pool: Pool = Depends(get_db_pool)):
+                            pool: Pool = Depends(DbPool.get_pool)):
     """
      Retrieves the count of actions based on the provided chat_id.
 
@@ -76,12 +65,9 @@ async def get_actions_count(chat_id: int,
          HTTPException: If there is an unauthorized access or an error occurs during retrieval.
      """
     try:
-        query = (
-            "SELECT chat_id, DATE_TRUNC('month', to_timestamp(ts)) AS month, COUNT(*) AS actions_count FROM statistic "
-            "WHERE chat_id = $1 GROUP BY chat_id, month")
-        args = [chat_id]
-        res = await execute(pool, query, *args, fetch=True)
+        res = await execute_actions_count(pool, chat_id)
         return res
     except Exception as e:
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback:\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")

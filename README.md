@@ -135,7 +135,7 @@ async def check_chat_id(pool: Pool, message):
         args = [message.chat.id, "Moskva", "None", "None"]
         await execute(pool, query, *args, fetch=True)
         sql_select = select("user_state", fields=("city", "date_difference", "qty_days"))
-        query, args = where(sql_select, {"chat_id": ("=", message.chat.id)}, 1)
+        query, args = where(sql_select, {"chat_id": ("=", message.chat.id)})
         res = await execute(pool, query, *args, fetch=True)
         decoded_result = [dict(r) for r in res][0]
         log.info("user_state table updated successfully")
