@@ -9,7 +9,10 @@ from helpers.check_values import check_chat_id, check_waiting, handlers
 from pydantic import ValidationError
 from typing import Annotated
 from fastapi import Request, HTTPException, Depends, APIRouter
+
+from postgres.database_adapters import add_user_id
 from postgres.pool import DbPool
+from prometheus.couters import unauthorized_access_counter, post_request_counter, instance_id, current_users_gauge
 
 
 
@@ -40,8 +43,10 @@ async def tg_webhooks(request: Request, config: Annotated[Settings, Depends(get_
     # Check if the X-Telegram-Bot-Api-Secret-Token is correct
     if x_telegram_bot_api_secret_token == config.SECRET_TOKEN_TG_WEBHOOK:
         if request.method == 'POST':
+            post_request_counter.labels(instance=instance_id).inc()
             try:
                 json_dict = await request.json()
+
             except json.JSONDecodeError:
                 log.error("Telegram webhook request body: JSONDecodeError")
                 log.debug("Exception traceback", traceback.format_exc())
@@ -59,6 +64,8 @@ async def tg_webhooks(request: Request, config: Annotated[Settings, Depends(get_
             try:
                 # Check the chat ID and process the message accordingly
                 status_user = await check_chat_id(pool, message)
+                await add_user_id(message.chat.id, pool)
+
                 # Check if user is waiting for a value to be entered
                 if "waiting_value" in status_user.values():
                     await check_waiting(status_user, pool, message, bot, config) # Check if user is waiting for a value to be entered
@@ -74,4 +81,5 @@ async def tg_webhooks(request: Request, config: Annotated[Settings, Depends(get_
             return HTTPException(status_code=405, detail="Method not allowed")
     else:
         log.error(f"Invalid X-Telegram-Bot-Api-Secret-Token: {x_telegram_bot_api_secret_token}")
+        unauthorized_access_counter.labels(instance=instance_id).inc()
         return HTTPException(status_code=401, detail="Unauthorized")

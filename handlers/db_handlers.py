@@ -2,13 +2,13 @@ import traceback
 from fastapi import APIRouter, Depends, Security
 from postgres.database_adapters import verify_credentials
 from fastapi.security import HTTPBasicCredentials
-from postgres.database_adapters import execute
-from postgres.sqlfactory import select, update, where, limit, order_by
 from handlers.db_actions import execute_actions_count, execute_users_actions
 import logging
 from asyncpg import Pool
 from postgres.pool import DbPool
 from fastapi import HTTPException
+from prometheus.couters import count_general_errors, instance_id
+
 
 log = logging.getLogger(__name__)
 bd_router = APIRouter()
@@ -41,6 +41,8 @@ async def ex_users_actions(chat_id: int = None,
         res = await execute_users_actions(pool, chat_id, from_ts, until_ts, limits)
         return res
     except Exception as e:
+        count_general_errors.labels(instance=instance_id).inc()
+
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback:\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail="Internal Server Error")

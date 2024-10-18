@@ -2,9 +2,10 @@ from helpers.helpers import wind, get_response
 from helpers.models_weather import *
 from pydantic import ValidationError
 from datetime import datetime, date, timedelta
-from postgres.database_adapters import execute, sql_update_user_state_bd
+from postgres.database_adapters import execute_query, sql_update_user_state_bd
 import aiohttp
 from postgres.sqlfactory import *
+from prometheus.couters import count_user_errors, count_general_errors, instance_id
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ async def start_message(pool, message, bot):
         query = ("INSERT INTO user_state (chat_id, city, date_difference, qty_days) VALUES ($1, $2, $3, $4)"
                  " ON CONFLICT (chat_id) DO NOTHING")
         args = [message.chat.id, "Moskva", "None", "None"]
-        await execute(pool, query, *args, fetch=True)
+        await execute_query(pool, query, *args, fetch=True)
     except Exception as e:
         log.error("An error occurred: %s", str(e))
         log.debug(traceback.format_exc())
@@ -90,6 +91,8 @@ async def add_city(pool, message, bot, config):
                     await bot.send_message(message.chat.id, 'City added successfully. Select the next command.')
                 else:
                     await bot.send_message(message.chat.id, 'City not found. Please try again')
+                    count_user_errors.labels(instance=instance_id).inc()
+                    log.debug("add_city: City not found.")
     except Exception as e:
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback: \n {traceback.format_exc()}")
@@ -151,6 +154,7 @@ async def weather(message, bot, config, status_user):
     except Exception as e:
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback: \n {traceback.format_exc()}")
+        count_general_errors.labels(instance=instance_id).inc()
         await bot.send_message(message.chat.id, f"Error")
     except ValidationError as e:
         log.error(f"Data validation error {e}")
@@ -173,6 +177,7 @@ async def weather_forecast(pool, message, bot):
     except Exception as e:
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback: \n {traceback.format_exc()}")
+        count_general_errors.labels(instance=instance_id).inc()
         await bot.send_message(message.chat.id, 'An error occurred. Please try again later.')
 
 
@@ -189,11 +194,14 @@ async def add_day(pool, message, bot, config, status_user):
         else:
             max_date = today_date + timedelta(days=10)
             await bot.send_message(message.chat.id, f'The entered date must be no later than {max_date}.')
+            count_user_errors.labels(instance=instance_id).inc()
             log.debug("add_day: The entered date must be no later than {max_date}.")
     except ValueError:
         await bot.send_message(message.chat.id, "Date must be in the format YYYY-MM-DD.")
+        count_user_errors.labels(instance=instance_id).inc()
         log.error("add_day: Does not match the format YYYY-MM-DD.")
     except Exception as e:
+        count_general_errors.labels(instance=instance_id).inc()
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback: \n {traceback.format_exc()}")
         log.debug(f"User input (weather_forecast): {message.text}")
@@ -225,6 +233,7 @@ async def get_weather_forecast(pool, date_difference, message, bot, config, stat
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback: \n {traceback.format_exc()}")
         await bot.send_message(message.chat.id, f"Error")
+        count_general_errors.labels(instance=instance_id).inc()
     except ValidationError as e:
         await bot.send_message(message.chat.id, f"Error data validation, please try again later.")
         log.error(f"weather_forecast: Validation error {e}")
@@ -240,12 +249,11 @@ async def forecast_for_several_days(pool, message, bot):
                                f'In this section, you can get the weather forecast for several days.\n'
                                f'Enter the number of days (from 1 to 10):')
         await sql_update_user_state_bd(bot, pool, message, "qty_days")
-        print(message.text)
-        # await execute(pool, *query, fetch=True)
     except Exception as e:
         log.debug("An error occurred: %s", str(e))
         log.debug(f"Exception traceback: \n {traceback.format_exc()}")
         await bot.send_message(message.chat.id, 'An error occurred. Please try again later.')
+        count_general_errors.labels(instance=instance_id).inc()
         return
 
 
@@ -260,14 +268,17 @@ async def get_forecast_several(pool, message, bot, config, status_user):
             qty_days += 1
         else:
             await bot.send_message(message.chat.id, 'Number of days must be from 1 to 10')
+            count_user_errors.labels(instance=instance_id).inc()
             return
     except ValueError:
         await bot.send_message(message.chat.id, f'Invalid input format please try again. {message.text}')
+        count_user_errors.labels(instance=instance_id).inc()
         log.error("forecast_for_several_days: Invalid input format" + message.text)
         return
     except Exception as e:
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback: \n {traceback.format_exc()}")
+        count_general_errors.labels(instance=instance_id).inc()
         return
 
     url_forecast_several = (f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&'
@@ -292,6 +303,7 @@ async def get_forecast_several(pool, message, bot, config, status_user):
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback: \n {traceback.format_exc()}")
         await bot.send_message(message.chat.id, f"Error requesting data. Please try again later.")
+        count_general_errors.labels(instance=instance_id).inc()
         return
     except ValidationError as e:
         await bot.send_message(message.chat.id, f"Error data validation, please try again later.")
@@ -341,6 +353,7 @@ async def statistic(pool, message, bot, config, status_user):
         log.error("An error occurred: %s", str(e))
         log.debug(traceback.format_exc())
         await bot.send_message(message.chat.id, f"Error")
+        count_general_errors.labels(instance=instance_id).inc()
     except ValidationError as e:
         await bot.send_message(message.chat.id, f"Error")
         log.error(f"statistic : Validation error {e}")
@@ -393,6 +406,7 @@ async def prediction(pool, message, bot, config, status_user):
         await bot.send_message(message.chat.id, f"Error, please try again")
         log.error(f"statistic : Validation error {e}")
     except Exception as e:
+        count_general_errors.labels(instance=instance_id).inc()
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback: \n {traceback.format_exc()}")
         await bot.send_message(message.chat.id, f"Error, please try again later")

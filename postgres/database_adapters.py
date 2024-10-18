@@ -1,13 +1,19 @@
-
 import asyncpg
 import logging
 import traceback
 from fastapi.security import HTTPBasicCredentials, HTTPBasic
 from fastapi import HTTPException, Depends
+from prometheus.couters import count_database_errors, instance_id, current_users_gauge
 from config.config import get_settings, Settings
-from postgres.sqlfactory import update, where, insert, select
+from postgres.sqlfactory import update, where, insert, select, delete
 from asyncpg import Pool
 from postgres.pool import DbPool
+from datetime import datetime
+import time
+from typing import Union, Optional
+import asyncio
+import datetime
+
 
 log = logging.getLogger(__name__)
 security = HTTPBasic()
@@ -65,12 +71,20 @@ async def create_table(pool: Pool = Depends(DbPool.get_pool)):
             action VARCHAR(50)
         );
     """
+    create_users_online_table = """
+    CREATE TABLE IF NOT EXISTS users_online (
+        user_id INTEGER NOT NULL,
+        timestamp INTEGER NOT NULL,
+        PRIMARY KEY (user_id)
+    );
+    """
 
     try:
         async with pool.acquire() as connection:
             async with connection.transaction():
                 await connection.execute(create_user_state_table)  # Execute user_state table creation
                 await connection.execute(create_statistic_table)  # Execute statistic table creation
+                await connection.execute(create_users_online_table)
 
         log.info("Tables created successfully")
     except Exception as e:
@@ -89,7 +103,7 @@ async def sql_update_user_state_bd(bot, pool: asyncpg.Pool, message, fields, new
         }
         query_where, args_where = where(update_query, conditions)
         args += args_where
-        await execute(pool, query_where, *args, fetch=True)
+        await execute_query(pool, query_where, *args, fetch=True)
         log.info(f"User {message.chat.id} {fields} updated successfully")
     except Exception as e:
         await bot.send_message(message.chat.id, "An error occurred. Please try again later.")
@@ -120,7 +134,7 @@ async def add_statistic_bd(pool: asyncpg.Pool, message):
             fields = {"ts": message.date, "user_name": message.from_user.first_name, "chat_id": message.chat.id,
                       "action": message.text}
             sql, args = insert("statistic", fields)
-            await execute(pool, sql, *args, fetch=True)
+            await execute_query(pool, sql, *args, fetch=True)
             log.debug("Statistic added successfully")
             return
         else:
@@ -130,14 +144,13 @@ async def add_statistic_bd(pool: asyncpg.Pool, message):
         log.error("Exception traceback:", traceback.format_exc())
 
 
-async def execute(pool: asyncpg.Pool, query: str, *args,
-                  fetch: bool = False,
-                  fetchval: bool = False,
-                  fetchrow: bool = False,
-                  execute: bool = False):
+async def execute_query(pool: asyncpg.Pool, query: str, *args,
+                        fetch: bool = False,
+                        fetchval: bool = False,
+                        fetchrow: bool = False,
+                        execute: bool = False) -> Optional[Union[asyncpg.Record, int]]:
     """
     Execute the specified query using the provided connection pool.
-
     Args:
         pool (asyncpg.Pool): The connection pool to execute the query.
         query (str): The SQL query to execute.
@@ -146,13 +159,11 @@ async def execute(pool: asyncpg.Pool, query: str, *args,
         fetchval (bool): If True, fetch a single value.
         fetchrow (bool): If True, fetch a single row.
         execute (bool): If True, execute the query without fetching.
-
     Returns:
         The result of the query based on the specified fetch method.
     """
     try:
         async with pool.acquire() as connection:
-            connection: asyncpg.Connection
             async with connection.transaction():
                 if fetch:
                     result = await connection.fetch(query, *args)
@@ -169,10 +180,45 @@ async def execute(pool: asyncpg.Pool, query: str, *args,
                 else:
                     result = None
         return result
+    except RuntimeError as e:
+        if str(e) == 'Цикл событий закрыт':
+            # Повторите операцию с базой данных, если цикл событий закрыт
+            await asyncio.sleep(0.1)  # ожидайте 100 мс перед повторной попыткой
+            return await execute_query(pool, query, *args, fetch=True)
+        else:
+            raise
     except asyncpg.PostgresError as e:
         log.error(f"Database error: {e} {traceback.format_exc()}")
+        count_database_errors.labels(instance=instance_id).inc()
     except Exception as e:
         log.error(f"Unexpected error: {e} {traceback.format_exc()} {query} {args}")
-    return None
 
-#
+
+
+async def add_user_id( user_id, pool: Pool = Depends(DbPool.get_pool)):
+
+        timestamp = int(datetime.datetime.now().timestamp())
+        sql,args = insert("users_online", {"user_id": user_id, "timestamp": timestamp}, on_conflict="user_id", do_update=True)
+        res = await execute_query(pool, sql, *args, fetch=True)
+        if res == "INSERT 0 1":
+            current_users_gauge.labels(instance=instance_id).inc()
+            log.info(f"User {user_id} inserted successfully")
+        else:
+            log.info(f"User {user_id} updated successfully")
+
+async def del_users_online(pool: asyncpg.Pool):
+    try:
+        log.debug("Starting the task: del_users_online")
+        res = delete("users_online")
+        sql, args = where(res, {"timestamp": ("<", int(time.time()) - 120)}) # 120 seconds test
+        res = await execute_query(pool, sql, *args, execute=True)
+        log.info("Task del_users_online: deletion process started")
+        result_parts = res.split()
+        deleted_count = int(result_parts[1]) if len(result_parts) == 2 else 0
+        if deleted_count >= 1:
+            log.info(f"Deleted {deleted_count} users online")
+            current_users_gauge.labels(instance=instance_id).dec(deleted_count)
+        else:
+            log.info("No users online were deleted")
+    except Exception as e:
+        log.error(f"Error в del_users_online: {e}")

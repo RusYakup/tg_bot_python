@@ -20,7 +20,8 @@ class Settings(BaseSettings):
     GET_PASSWORD: str
     GF_SECURITY_ADMIN_USER: str = "ADMIN_GF"
     GF_SECURITY_ADMIN_PASSWORD: str = "ADMIN_GF"
-    POOL_DB: str = "localhost"
+    POOL_HOST_DB: str = "localhost"
+    NGROK_AUTHTOKEN: str
 
     model_config = SettingsConfigDict(env_file="../.env")
 

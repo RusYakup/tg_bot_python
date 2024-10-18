@@ -4,11 +4,17 @@ from config.config import Settings
 from telebot.async_telebot import AsyncTeleBot
 import logging
 import traceback
-from postgres.database_adapters import execute, add_statistic_bd, sql_update_user_state_bd
+from postgres.database_adapters import execute_query, add_statistic_bd, sql_update_user_state_bd
 from asyncpg.pool import Pool
 from postgres.sqlfactory import select, where, insert
-from prometheus_client import Counter
+from prometheus.couters import (unknown_command_counter, error_counter, total_users_counter, instance_id, )
+
+
+
+
+
 log = logging.getLogger(__name__)
+
 
 
 async def check_chat_id(pool: Pool, message):
@@ -29,12 +35,17 @@ async def check_chat_id(pool: Pool, message):
         }
         on_conflict = "chat_id"
         sql_insert, args_insert = insert("user_state", fields, on_conflict=on_conflict)
-        await execute(pool, sql_insert, *args_insert, fetch=True)
+        result = await execute_query(pool, sql_insert, *args_insert, fetch=True)
+        if result == "INSERT 0 1":
+            log.info(f"User {message.chat.id} inserted successfully")
+            # Инкрементируем счетчик общего количества пользователей
+            total_users_counter.labels(instance=instance_id).inc()
+
 
         sql_select = select("user_state", ["city", "date_difference", "qty_days"])
         query, args = where(sql_select, {"chat_id": ("=", message.chat.id)})
 
-        res = await execute(pool, query, *args, fetch=True)
+        res = await execute_query(pool, query, *args, fetch=True)
 
         decoded_result = [dict(r) for r in res][0]
         log.debug("user_state table updated successfully")
@@ -72,11 +83,6 @@ async def check_waiting(status_user: dict, pool, message, bot: AsyncTeleBot, con
 
 
 
-# Определение счетчиков Prometheus
-unknown_command_counter = Counter('unknown_commands', 'Count of unknown commands received')
-error_counter = Counter('errors', 'Count of errors encountered')
-
-
 async def handlers(pool, message, bot, config, status_user):
     """
     This function handles different message commands and calls corresponding functions.
@@ -89,6 +95,7 @@ async def handlers(pool, message, bot, config, status_user):
         status_user (dict): Dictionary containing user status information.
     """
     try:
+        # await handle_user_request()
         if message.text == '/start':
             await start_message(pool, message, bot)
             await add_statistic_bd(pool, message)
@@ -114,10 +121,10 @@ async def handlers(pool, message, bot, config, status_user):
             await prediction(pool, message, bot, config, status_user)
             await add_statistic_bd(pool, message)
         else:
-            unknown_command_counter.inc()   # Count the number of unknown commands
+            unknown_command_counter.labels(instance=instance_id).inc()   # Count the number of unknown commands
             await bot.send_message(message.chat.id, 'Unknown command. Please try again\n/help')
     except Exception as e:
-        error_counter.inc()   # Count the number of errors
+        error_counter.labels(instance=instance_id).inc()   # Count the number of errors
         await bot.send_message(message.chat.id,
                                'An error occurred. Please send administrators a message or contact support.')
         log.error("An error occurred: %s", str(e))
