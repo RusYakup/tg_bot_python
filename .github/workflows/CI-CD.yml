@@ -72,7 +72,7 @@ jobs:
 
       - name: Push Docker image
         run: |
-          docker push --all-tags ${{ secrets.DOCKER_USERNAME }}/weather_bot
+          docker push ${{ secrets.DOCKER_USERNAME }}/weather_bot:latest
 
   run_docker_compose:
     runs-on: ubuntu-latest
