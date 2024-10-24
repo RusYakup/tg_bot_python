@@ -15,6 +15,8 @@
          max-file: ${LOG_MAX_FILE:-1}
 
    services:
+
+
      ngrok:
        image: ngrok/ngrok:latest
        <<: *logging
@@ -22,10 +24,11 @@
        environment:
          - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN:?err}
        command: http --domain=${APP_DOMAIN:?err} 8888
+
        network_mode: host
 
      weather_bot:
-       build: ..
+       image: yakuptest/weather_bot:latest
        container_name: weather_tg_bot_build
        ports:
          - "8888:8888"
@@ -37,9 +40,14 @@
          - TG_BOT_API_URL=${TG_BOT_API_URL:?err}
          - APP_DOMAIN=${APP_DOMAIN:?err}
          - SECRET_TOKEN_TG_WEBHOOK=${SECRET_TOKEN_TG_WEBHOOK:?err}
+       volumes:
+         - /home/rustam/tg_env/.env:/.env
+       command: python -m src.app
        restart: unless-stopped
+       <<: *logging
        networks:
          - external
+
 
      postgres:
        image: postgres
@@ -68,6 +76,7 @@
          - prometheus_job=postgres_exporter
        depends_on:
          - postgres
+       restart: unless-stopped
        networks:
          - external
 
@@ -95,9 +104,11 @@
          - "3000:3000"
        depends_on:
          - prometheus
+       restart: unless-stopped
        networks:
          - external
        <<: *logging
+
 
    networks:
      internal:
