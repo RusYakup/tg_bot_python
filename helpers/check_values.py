@@ -6,7 +6,7 @@ import logging
 import traceback
 from postgres.database_adapters import execute_query, add_statistic_bd, sql_update_user_state_bd
 from asyncpg.pool import Pool
-from postgres.sqlfactory import select, where, insert
+from postgres.sqlfactory import select, where, insert, update
 from prometheus.couters import (unknown_command_counter, error_counter, total_users_counter, instance_id, )
 
 
@@ -33,14 +33,10 @@ async def check_chat_id(pool: Pool, message):
             "date_difference": "None",
             "qty_days": "None",
         }
+
         on_conflict = "chat_id"
         sql_insert, args_insert = insert("user_state", fields, on_conflict=on_conflict)
-        result = await execute_query(pool, sql_insert, *args_insert, fetch=True)
-        if result == "INSERT 0 1":
-            log.info(f"User {message.chat.id} inserted successfully")
-            # Инкрементируем счетчик общего количества пользователей
-            total_users_counter.labels(instance=instance_id).inc()
-
+        await execute_query(pool, sql_insert, *args_insert, fetch=True)
 
         sql_select = select("user_state", ["city", "date_difference", "qty_days"])
         query, args = where(sql_select, {"chat_id": ("=", message.chat.id)})

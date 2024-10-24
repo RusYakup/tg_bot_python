@@ -2,7 +2,7 @@ import traceback
 from fastapi import APIRouter, Depends, Security
 from postgres.database_adapters import verify_credentials
 from fastapi.security import HTTPBasicCredentials
-from handlers.db_actions import execute_actions_count, execute_users_actions
+from handlers.db_query_builder import execute_users_actions, execute_actions_count
 import logging
 from asyncpg import Pool
 from postgres.pool import DbPool
@@ -10,9 +10,10 @@ from fastapi import HTTPException
 from prometheus.couters import count_general_errors, instance_id
 
 
+
+
 log = logging.getLogger(__name__)
 bd_router = APIRouter()
-
 
 
 @bd_router.get("/users_actions")

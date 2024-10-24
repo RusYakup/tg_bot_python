@@ -34,9 +34,3 @@ class DbPool:
         if not cls._db_pool:
             raise UninitializedDatabasePoolError()
         await cls._db_pool.close()
-
-
-
-# async def get_db_pool() -> Pool:
-#     pool = await DbPool.get_pool()
-#     return pool

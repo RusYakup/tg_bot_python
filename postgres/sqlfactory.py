@@ -89,23 +89,24 @@ def update(table_name: str, fields: Dict[str, Any]) -> Tuple[str, List[Any]]:
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback:\n{traceback.format_exc()}")
 
-def insert(table_name: str, fields: Dict[str, Any], on_conflict: Optional[str] = None, do_update: bool = False) -> Tuple[str, List[Any]]:
+
+
+def insert(table_name: str, fields: Dict[str, Any], on_conflict: Optional[str] = None, do_update: bool = False, update_fields: Optional[List[str]] = None) -> \
+Tuple[str, List[Any]]:
     try:
         columns = ", ".join(fields.keys())
         placeholders = ', '.join([f"${i + 1}" for i in range(len(fields))])
         sql = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
-        if on_conflict:
-            if do_update:
-                conflict_update = ", ".join([f"{col} = ${i + 1}" for i, col in enumerate(fields.keys())])
-                sql += f" ON CONFLICT ({on_conflict}) DO UPDATE SET {conflict_update}"
-            else:
-                sql += f" ON CONFLICT ({on_conflict}) DO NOTHING"
-
+        if on_conflict and do_update:
+            conflict_update = ", ".join(
+                [f"{col} = EXCLUDED.{col}" for col in update_fields]
+            )
+            sql += f" ON CONFLICT ({on_conflict}) DO UPDATE SET {conflict_update}"
         args = list(fields.values())
         return sql, args
+
     except Exception as e:
         count_general_errors.labels(instance=instance_id).inc()
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback:\n{traceback.format_exc()}")
-
 

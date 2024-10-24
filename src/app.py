@@ -1,14 +1,7 @@
-import os
 import traceback
-import uvicorn
 import logging
 import asyncio
 import sys
-
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
-from postgres.database_adapters import del_users_online
-# from postgres.database_adapters import start_scheduler, del_users_online
 from src.startup import main
 from postgres.pool import DbPool
 from handlers.db_handlers import bd_router
@@ -43,29 +36,13 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(bd_router)
 app.include_router(webhook_router)
 
+
 instrumentator = Instrumentator().instrument(app).expose(app, include_in_schema=False, should_gzip=True)
-
-
-# async def run_uvicorn():
-#     config = uvicorn.Config("app:app", host="0.0.0.0", port=8888, log_level="info")
-#     server = uvicorn.Server(config)
-#     await server.serve()
-#
-#
-# async def main():
-#     pool = await startup()
-#
-#     scheduler = AsyncIOScheduler()
-#     scheduler.add_job(del_users_online, 'interval', seconds=60, args=[pool], misfire_grace_time=10)
-#     scheduler.start()
-#     log.info("The scheduler has been started in the background")
-#
-#     await run_uvicorn()
-
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except Exception as e:
-        log.error(f"Ошибка при запуске: {e}")
+        log.error(f"error during start: {e}")
         log.debug(traceback.format_exc())
+        sys.exit(1)

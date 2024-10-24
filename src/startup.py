@@ -7,8 +7,7 @@ import logging
 from config.config import get_settings
 import traceback
 from postgres.pool import DbPool
-
-
+from prometheus.couters import inc_counters
 
 log = logging.getLogger(__name__)
 
@@ -25,6 +24,7 @@ async def startup():
         check_api_key(settings.API_KEY)
         set_webhook(settings.TOKEN, settings.APP_DOMAIN, settings.SECRET_TOKEN_TG_WEBHOOK)
         await create_table(pool)
+        await inc_counters()
 
         log.info("Startup completed successfully")
         return pool
@@ -35,7 +35,7 @@ async def startup():
 
 
 async def run_uvicorn():
-    config = uvicorn.Config("app:app", host="0.0.0.0", port=8888, log_level="info")
+    config = uvicorn.Config("src.app:app", host="0.0.0.0", port=8888, log_level="info")
     server = uvicorn.Server(config)
     await server.serve()
 

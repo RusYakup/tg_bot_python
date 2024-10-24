@@ -14,7 +14,6 @@ from typing import Union, Optional
 import asyncio
 import datetime
 
-
 log = logging.getLogger(__name__)
 security = HTTPBasic()
 
@@ -73,9 +72,8 @@ async def create_table(pool: Pool = Depends(DbPool.get_pool)):
     """
     create_users_online_table = """
     CREATE TABLE IF NOT EXISTS users_online (
-        user_id INTEGER NOT NULL,
-        timestamp INTEGER NOT NULL,
-        PRIMARY KEY (user_id)
+            chat_id INTEGER NOT NULL UNIQUE,
+            timestamp INTEGER NOT NULL
     );
     """
 
@@ -194,30 +192,56 @@ async def execute_query(pool: asyncpg.Pool, query: str, *args,
         log.error(f"Unexpected error: {e} {traceback.format_exc()} {query} {args}")
 
 
+async def add_user_id(chat_id, pool: Pool = Depends(DbPool.get_pool)):
+    timestamp = int(datetime.datetime.now().timestamp())
 
-async def add_user_id( user_id, pool: Pool = Depends(DbPool.get_pool)):
-
-        timestamp = int(datetime.datetime.now().timestamp())
-        sql,args = insert("users_online", {"user_id": user_id, "timestamp": timestamp}, on_conflict="user_id", do_update=True)
-        res = await execute_query(pool, sql, *args, fetch=True)
-        if res == "INSERT 0 1":
+    try:
+        sql_update, args_update = update("users_online", {"timestamp": timestamp})
+        conditions = {
+            "chat_id": ("=", chat_id)
+        }
+        query_where, args = where(sql_update, conditions)
+        args_where = args_update + args
+        res = await execute_query(pool, query_where, *args_where, execute=True)
+        if res == "UPDATE 0":
+            sql_insert, args = insert("users_online", {"chat_id": chat_id, "timestamp": timestamp})
             current_users_gauge.labels(instance=instance_id).inc()
-            log.info(f"User {user_id} inserted successfully")
-        else:
-            log.info(f"User {user_id} updated successfully")
+            await execute_query(pool, sql_insert, *args, execute=True)
+    except Exception as e:
+        log.error(f"An error occurred during user state adding: {e}")
+        log.debug("Exception traceback:", traceback.format_exc())
+    # on_conflict = "chat_id"
+    # update_fields = ["timestamp"]
+    # sql, args = insert("users_online", {"chat_id": chat_id, "timestamp": timestamp}, on_conflict=on_conflict,
+    #                    do_update=True, update_fields=update_fields)
+    # res = await execute_query(pool, sql, *args, execute=True)
+    # print(sql, args)
+    #
+    # print(f"res = {res} {type(res)}")
+    # if res == "INSERT 0 1":
+    #     current_users_gauge.labels(instance=instance_id).inc()
+    #     log.info(f"User {chat_id} inserted successfully")
+    # else:
+    #     log.info(f"User {chat_id} updated successfully")
+
 
 async def del_users_online(pool: asyncpg.Pool):
     try:
         log.debug("Starting the task: del_users_online")
         res = delete("users_online")
-        sql, args = where(res, {"timestamp": ("<", int(time.time()) - 120)}) # 120 seconds test
+        sql, args = where(res, {"timestamp": ("<", int(time.time()) - 60)})  # 60 seconds test
         res = await execute_query(pool, sql, *args, execute=True)
         log.info("Task del_users_online: deletion process started")
         result_parts = res.split()
         deleted_count = int(result_parts[1]) if len(result_parts) == 2 else 0
         if deleted_count >= 1:
             log.info(f"Deleted {deleted_count} users online")
-            current_users_gauge.labels(instance=instance_id).dec(deleted_count)
+            current_value = current_users_gauge.labels(instance=instance_id)._value.get()
+            if current_value > 0:
+                current_users_gauge.labels(instance=instance_id).dec()
+            else:
+                return {
+                    "message": f"Current users count for instance {instance_id} is already zero and cannot be decremented."}
         else:
             log.info("No users online were deleted")
     except Exception as e:

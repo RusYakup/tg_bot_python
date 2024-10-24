@@ -5,7 +5,7 @@ from telebot.async_telebot import AsyncTeleBot
 import logging
 import traceback
 from typing import Any
-from prometheus.couters import (count_successful_requests, count_api_weather_errors, count_user_errors, instance_id,
+from prometheus.couters import (count_api_weather_errors, count_user_errors, instance_id,
                                 count_failed_requests, request_duration, count_response_code_200,
                                 count_response_code_400, count_response_code_500, count_response_code_502,
                                 count_response_code_401, count_response_code_403, count_response_code_404,
@@ -186,7 +186,6 @@ def get_response(message, api_url: str, bot: AsyncTeleBot) -> Any:
         request_duration.labels(instance=instance_id).observe(response.elapsed.total_seconds())
         if response.status_code == 200:
             logging.debug("Response 200")
-            count_successful_requests.labels(instance=instance_id).inc()
             count_response_code_200.labels(instance=instance_id).inc()
 
             return json.loads(response.text)

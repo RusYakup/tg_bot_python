@@ -5,6 +5,29 @@ import socket
 def get_instance_id():
     return socket.gethostname()
 
+async def inc_counters():
+    current_users_gauge.labels(instance=instance_id).inc(0)
+    total_users_counter.labels(instance=instance_id).inc(0)
+    count_database_errors.labels(instance=instance_id).inc(0)
+    unknown_command_counter.labels(instance=instance_id).inc(0)
+    error_counter.labels(instance=instance_id).inc(0)
+    request_duration.labels(instance=instance_id).observe(0)
+    count_general_errors.labels(instance=instance_id).inc(0)
+    post_request_counter.labels(instance=instance_id).inc(0)
+    count_api_weather_errors.labels(instance=instance_id).inc(0)
+    count_successful_requests.labels(instance=instance_id).inc(0)
+    count_failed_requests.labels(instance=instance_id).inc(0)
+    count_instance_errors.labels(instance=instance_id).inc(0) # count_instance_errors
+    count_response_code_200.labels(instance=instance_id).inc(0)
+    count_response_code_400.labels(instance=instance_id).inc(0)
+    count_response_code_401.labels(instance=instance_id).inc(0)
+    count_response_code_403.labels(instance=instance_id).inc(0)
+    count_response_code_404.labels(instance=instance_id).inc(0)
+    count_response_code_500.labels(instance=instance_id).inc(0)
+    count_response_code_502.labels(instance=instance_id).inc(0)
+    count_user_errors.labels(instance=instance_id).inc(0)
+    unauthorized_access_counter.labels(instance=instance_id).inc(0)
+
 
 instance_id = get_instance_id()
 # Gauge для отслеживания текущего количества активных пользователей
@@ -14,15 +37,12 @@ total_users_counter = Counter('total_users', 'Total number of users',['instance'
 # Database errors
 count_database_errors = Counter('database_errors', 'Database errors',['instance']) # Database errors +
 
-
 # Метрика для подсчета ошибок при обработке команд
 unknown_command_counter = Counter('unknown_commands', 'Count of unknown commands received',['instance']) # Count of unknown commands received +
 error_counter = Counter('errors', 'Count of errors encountered',['instance']) # Count of errors encountered +
 
-
 # Метрики производительности (время выполнения)
 request_duration = Histogram('request_duration_seconds', 'Time spent processing request',['instance'])
-
 
 # Общие ошибки приложения
 count_general_errors = Counter('general_errors', 'General application errors',['instance'])
@@ -60,17 +80,20 @@ unauthorized_access_counter = Counter('unauthorized_access_errors', 'Count of un
 # current_users_gauge: current_users
 # Total Users: total_users
 # POST Requests: post_requests_total
+
 # Duration of Requests: request_duration_seconds
 # 2. Ошибки, связанные с пользователями
 # Панель (Panel) 2: Ошибки пользователей
 # User Interaction Errors: user_errors
 # Unknown Commands: unknown_commands
+
 # 3. Ошибки, связанные с API
 # Панель (Panel) 3: Ошибки API
 # API Weather Errors: api_weather_errors
 # Successful Requests: successful_requests
 # Failed Requests: failed_requests
 # Unauthorized Access Errors: unauthorized_access_errors
+
 # 4. Ошибки сервера и внутренние ошибки
 # Панель (Panel) 4: Ошибки сервера и внутренние ошибки
 # General Application Errors: general_errors

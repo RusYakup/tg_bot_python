@@ -1,15 +1,54 @@
+#global:
+#  scrape_interval: 15s
+#
+#scrape_configs:
+#  - job_name: 'docker'
+#    docker_sd_configs:
+#      - host: unix:///var/run/docker.sock
+#    relabel_configs:
+#      - source_labels: [__meta_docker_container_name]
+#        regex: prometheus
+#        action: drop
 global:
   scrape_interval: 15s
 
 scrape_configs:
   - job_name: 'docker'
-    dns_sd_configs:
-      - names:
-          - tasks.web
-        type: 'A'
-        port: 8888
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
     relabel_configs:
-      - source_labels: [__meta_dns_name]
-        regex: 'tasks.web'
-        target_label: 'instance'
-    scrape_interval: 10s
+      - source_labels: [__meta_docker_container_name]
+        regex: prometheus
+        action: drop
+
+      - source_labels: [__meta_docker_container_name]
+        action: keep
+        regex: 'weather_tg_bot_build|postgres_exporter'  # Имена ваших контейнеров
+
+      - source_labels: [__meta_docker_container_name]
+        action: replace
+        target_label: job
+        regex: '([^/]+)$'
+
+      - source_labels: [__meta_docker_container_label_com_docker_compose_service]
+        action: replace
+        target_label: compose_service
+        regex: '(.+)'
+
+      - source_labels: [__meta_docker_container_name]
+        action: replace
+        target_label: __address__
+        regex: 'weather_tg_bot_build|postgres_exporter'
+        replacement: '${1}'
+
+      - source_labels: [__address__, __meta_docker_container_name]
+        regex: '(.*);weather_tg_bot_build'
+        replacement: '${1}:8888'  # Порт контейнера weather_tg_bot_build
+        action: replace
+        target_label: __address__
+
+      - source_labels: [__address__, __meta_docker_container_name]
+        regex: '(.*);postgres_exporter'
+        replacement: '${1}:9187'  # Порт контейнера postgres_exporter
+        action: replace
+        target_label: __address__
