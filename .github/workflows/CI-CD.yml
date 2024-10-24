@@ -40,7 +40,8 @@ jobs:
         run: |
           docker buildx build \
             --load -t ${{ secrets.DOCKER_USERNAME }}/weather_bot:latest \
-            .
+              .
+          docker images ${{ secrets.DOCKER_USERNAME }}/weather_bot:latest
         env:
           API_KEY: ${{ secrets.API_KEY }}
           APP_DOMAIN: ${{ secrets.APP_DOMAIN }}
