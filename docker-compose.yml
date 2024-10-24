@@ -25,7 +25,7 @@
        network_mode: host
 
      weather_bot:
-       image: yakuptest/weather_bot:tagname
+       image: yakuptest/weather_bot:latest
        ports:
          - "8888:8888"
        labels:
