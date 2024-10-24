@@ -39,22 +39,23 @@ jobs:
       - name: Build Docker image
         run: |
           docker buildx build \
-            --build-arg API_KEY=${{ secrets.API_KEY }} \
-            --build-arg APP_DOMAIN=${{ secrets.APP_DOMAIN }} \
-            --build-arg GET_PASSWORD=${{ secrets.GET_PASSWORD }} \
-            --build-arg GET_USER=${{ secrets.GET_USER }} \
-            --build-arg GF_SECURITY_ADMIN_PASSWORD=${{ secrets.GF_SECURITY_ADMIN_PASSWORD }} \
-            --build-arg GF_SECURITY_ADMIN_USER=${{ secrets.GF_SECURITY_ADMIN_USER }} \
-            --build-arg NGROK_AUTHTOKEN=${{ secrets.NGROK_AUTHTOKEN }} \
-            --build-arg POOL_HOST_DB=${{ secrets.POOL_HOST_DB }} \
-            --build-arg POSTGRES_DB=${{ secrets.POSTGRES_DB }} \
-            --build-arg POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} \
-            --build-arg POSTGRES_USER=${{ secrets.POSTGRES_USER }} \
-            --build-arg SECRET_TOKEN_TG_WEBHOOK=${{ secrets.SECRET_TOKEN_TG_WEBHOOK }} \
-            --build-arg TG_BOT_API_URL=${{ secrets.TG_BOT_API_URL }} \
-            --build-arg TOKEN=${{ secrets.TOKEN }} \
             -t ${{ secrets.DOCKER_USERNAME }}/weather_bot:latest \
             .
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+          APP_DOMAIN: ${{ secrets.APP_DOMAIN }}
+          GET_PASSWORD: ${{ secrets.GET_PASSWORD }}
+          GET_USER: ${{ secrets.GET_USER }}
+          GF_SECURITY_ADMIN_PASSWORD: ${{ secrets.GF_SECURITY_ADMIN_PASSWORD }}
+          GF_SECURITY_ADMIN_USER: ${{ secrets.GF_SECURITY_ADMIN_USER }}
+          NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
+          POOL_HOST_DB: ${{ secrets.POOL_HOST_DB }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          SECRET_TOKEN_TG_WEBHOOK: ${{ secrets.SECRET_TOKEN_TG_WEBHOOK }}
+          TG_BOT_API_URL: ${{ secrets.TG_BOT_API_URL }}
+          TOKEN: ${{ secrets.TOKEN }}
 
   push_docker_image:
     runs-on: ubuntu-latest
