@@ -41,7 +41,7 @@ services:
       - APP_DOMAIN=${APP_DOMAIN:?err}
       - SECRET_TOKEN_TG_WEBHOOK=${SECRET_TOKEN_TG_WEBHOOK:?err}
     volumes:
-      - /home/rustam/tg_env/.env:/app/.env
+      - /home/rustam/tg_env/env.txt:/app/.env
     command: python -m src.app
     restart: unless-stopped
     <<: *logging

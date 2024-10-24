@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     POOL_HOST_DB: str = "localhost"
     NGROK_AUTHTOKEN: str
 
-    model_config = SettingsConfigDict(env_file="/app/.env")
+    model_config = SettingsConfigDict(env_file="../.env")
 
 
 @lru_cache
