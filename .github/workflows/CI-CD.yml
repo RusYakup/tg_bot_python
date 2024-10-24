@@ -38,7 +38,7 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build \
+          docker buildx build \
             --build-arg API_KEY=${{ secrets.API_KEY }} \
             --build-arg APP_DOMAIN=${{ secrets.APP_DOMAIN }} \
             --build-arg GET_PASSWORD=${{ secrets.GET_PASSWORD }} \
