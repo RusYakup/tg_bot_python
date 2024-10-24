@@ -73,6 +73,8 @@ jobs:
 
       - name: Push Docker image
         run: |
+          docker images
+          docker tag ${{ secrets.DOCKER_USERNAME }}/weather_bot:latest ${{ secrets.DOCKER_USERNAME }}/weather_bot:latest
           docker push ${{ secrets.DOCKER_USERNAME }}/weather_bot:latest
 
   run_docker_compose:
