@@ -52,9 +52,3 @@ jobs:
             .
           docker images # Показываем все образы
           docker images ${{ secrets.DOCKER_USERNAME }}/weather_bot:latest # Проверка создаваемого образа
-        env:
-          API_KEY: ${{ secrets.API_KEY }}
-          APP_DOMAIN: ${{ secrets.APP_DOMAIN }}
-          SECRET_TOKEN_TG_WEBHOOK: ${{ secrets.SECRET_TOKEN_TG_WEBHOOK }}
-          TG_BOT_API_URL: ${{ secrets.TG_BOT_API_URL }}
-          TOKEN: ${{ secrets.TOKEN }}
