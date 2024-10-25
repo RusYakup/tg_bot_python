@@ -40,8 +40,12 @@ services:
       - TG_BOT_API_URL=${TG_BOT_API_URL:?err}
       - APP_DOMAIN=${APP_DOMAIN:?err}
       - SECRET_TOKEN_TG_WEBHOOK=${SECRET_TOKEN_TG_WEBHOOK:?err}
-    volumes:
-      - /home/rustam/tg_env/env.txt:/app/.env
+      - POSTGRES_USER=${POSTGRES_USER:?err}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?err}
+      - POSTGRES_DB=${POSTGRES_DB:?err}
+      - GET_USER=${GET_USER:?err}
+      - GET_PASSWORD=${GET_PASSWORD:?err}
+      - POOL_HOST_DB=${POOL_HOST_DB:?err}
     command: python -m src.app
     restart: unless-stopped
     <<: *logging
