@@ -42,6 +42,7 @@ jobs:
           docker buildx inspect mybuilder --bootstrap
           docker buildx build \
             -t ${{ secrets.DOCKER_USERNAME }}/weather_bot:latest \
+            --tag ${{ secrets.DOCKER_USERNAME }}/weather_bot:latest \
             .
           docker images
           docker images ${{ secrets.DOCKER_USERNAME }}/weather_bot:latest
