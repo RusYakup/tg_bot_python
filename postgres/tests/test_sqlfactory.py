@@ -1,5 +1,4 @@
 import pytest
-
 from postgres.sqlfactory import select, where, order_by, limit, group_by, delete, insert, update
 
 
@@ -28,8 +27,6 @@ def test_limit():
     assert limit(sql, 10, args) == ("SELECT * FROM users LIMIT $3", ["1809", "Kazan", 10])
 
 
-
-
 def test_order_by():
     assert order_by("SELECT * FROM users", "chat_id", "DESC") == "SELECT * FROM users ORDER BY chat_id DESC"
 
@@ -50,12 +47,10 @@ def test_update():
 def test_insert():
     """
     Tests the insert function in the sqlfactory module.
-
     The following tests are performed:
-
     1. A basic insert statement with three fields.
     2. An insert statement with an on conflict clause.
-    3. An insert statement with an on conflict clause and a do update clause with a single field.
+    3. An insert statement with an on conflict clause and do update clause with a single field.
     """
     table = "users"
     fields = {
@@ -63,22 +58,11 @@ def test_insert():
         "city": "Kazan",
         "last_name": "Yakupov",
     }
-    assert insert(table, fields) == ('INSERT INTO users (chat_id, city, last_name) VALUES ($1, $2, $3)', ['1809', 'Kazan', 'Yakupov'])
-    assert insert(table, fields,
-                  on_conflict="chat_id") == ('INSERT INTO users (chat_id, city, last_name) VALUES ($1, $2, $3)', ['1809', 'Kazan', 'Yakupov'])
-
-    assert insert(table, fields, on_conflict="chat_id", do_update=True, update_fields=[
-        "city"]) == ('INSERT INTO users (chat_id, city, last_name) VALUES ($1, $2, $3) ON CONFLICT (chat_id) DO UPDATE SET city = EXCLUDED.city', ['1809', 'Kazan', 'Yakupov'])
-
-    table = "users"
-    fields = {
-        "chat_id": "1809",
-        "city": "Kazan",
-        "last_name": "Yakupov",
-    }
-    assert insert(table, fields) == ('INSERT INTO users (chat_id, city, last_name) VALUES ($1, $2, $3)', ['1809', 'Kazan', 'Yakupov'])
-    assert insert(table, fields,
-                  on_conflict="chat_id") == ('INSERT INTO users (chat_id, city, last_name) VALUES ($1, $2, $3)', ['1809', 'Kazan', 'Yakupov'])
-
-    assert insert(table, fields, on_conflict="chat_id", do_update=True, update_fields=[
-        "city"]) == ('INSERT INTO users (chat_id, city, last_name) VALUES ($1, $2, $3) ON CONFLICT (chat_id) DO UPDATE SET city = EXCLUDED.city', ['1809', 'Kazan', 'Yakupov'])
+    assert insert(table, fields) == (
+    'INSERT INTO users (chat_id, city, last_name) VALUES ($1, $2, $3)', ['1809', 'Kazan', 'Yakupov'])
+    assert insert(table, fields, on_conflict="chat_id") == (
+    'INSERT INTO users (chat_id, city, last_name) VALUES ($1, $2, $3) ON CONFLICT (chat_id) DO NOTHING',
+    ['1809', 'Kazan', 'Yakupov'])
+    assert insert(table, fields, on_conflict="chat_id", update_fields=["city"]) == (
+    'INSERT INTO users (chat_id, city, last_name) VALUES ($1, $2, $3) ON CONFLICT (chat_id) DO UPDATE SET city = EXCLUDED.city',
+    ['1809', 'Kazan', 'Yakupov'])
