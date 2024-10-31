@@ -4,19 +4,16 @@ from config.config import Settings
 from telebot.async_telebot import AsyncTeleBot
 import logging
 import traceback
+from decorators.decorators import log_database_query
 from postgres.database_adapters import execute_query, add_statistic_bd, sql_update_user_state_bd
 from asyncpg.pool import Pool
 from postgres.sqlfactory import select, where, insert, update
 from prometheus.couters import (unknown_command_counter, error_counter, total_users_counter, instance_id, )
 
-
-
-
-
 log = logging.getLogger(__name__)
 
 
-
+@log_database_query
 async def check_chat_id(pool: Pool, message):
     """
      Checks the chat_id in the user_state table, inserts if not present, and retrieves the data.
@@ -70,13 +67,12 @@ async def check_waiting(status_user: dict, pool, message, bot: AsyncTeleBot, con
             await add_day(pool, message, bot, config, status_user)
             await sql_update_user_state_bd(bot, pool, message, "date_difference", "None")
         if status_user["qty_days"] == "waiting_value":
-            await get_forecast_several(pool, message, bot, config, status_user)
+            await get_forecast_several(message, bot, config, status_user)
             await sql_update_user_state_bd(bot, pool, message, "qty_days", "None")
     except Exception as e:
         await bot.send_message(message.chat.id, 'An error occurred. Please try again later.')
         log.error("An error occurred: %s", str(e))
         log.debug("Exception traceback", traceback.format_exc())
-
 
 
 async def handlers(pool, message, bot, config, status_user):
@@ -91,7 +87,6 @@ async def handlers(pool, message, bot, config, status_user):
         status_user (dict): Dictionary containing user status information.
     """
     try:
-        # await handle_user_request()
         if message.text == '/start':
             await start_message(pool, message, bot)
             await add_statistic_bd(pool, message)
@@ -111,16 +106,16 @@ async def handlers(pool, message, bot, config, status_user):
             await forecast_for_several_days(pool, message, bot)
             await add_statistic_bd(pool, message)
         elif message.text == '/weather_statistic':
-            await statistic(pool, message, bot, config, status_user)
+            await statistic(message, bot, config, status_user)
             await add_statistic_bd(pool, message)
         elif message.text == '/prediction':
-            await prediction(pool, message, bot, config, status_user)
+            await prediction(message, bot, config, status_user)
             await add_statistic_bd(pool, message)
         else:
-            unknown_command_counter.labels(instance=instance_id).inc()   # Count the number of unknown commands
+            unknown_command_counter.labels(instance=instance_id).inc()  # Count the number of unknown commands
             await bot.send_message(message.chat.id, 'Unknown command. Please try again\n/help')
     except Exception as e:
-        error_counter.labels(instance=instance_id).inc()   # Count the number of errors
+        error_counter.labels(instance=instance_id).inc()  # Count the number of errors
         await bot.send_message(message.chat.id,
                                'An error occurred. Please send administrators a message or contact support.')
         log.error("An error occurred: %s", str(e))

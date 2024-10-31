@@ -9,15 +9,11 @@ from helpers.check_values import check_chat_id, check_waiting, handlers
 from pydantic import ValidationError
 from typing import Annotated
 from fastapi import Request, HTTPException, Depends, APIRouter
-
 from postgres.database_adapters import add_user_id
 from postgres.pool import DbPool
 from prometheus.couters import unauthorized_access_counter, post_request_counter, instance_id, current_users_gauge
 
-
-
 log = logging.getLogger(__name__)
-
 
 webhook_router = APIRouter()
 
@@ -35,11 +31,21 @@ async def tg_webhooks(request: Request, config: Annotated[Settings, Depends(get_
     - pool: Pool object for database connection
 
     Returns:
-    - HTTPException if there are errors in processing the request
+    - HTTPException: If there are errors in processing the request.
+
+    This function handles incoming Telegram webhook requests and processes the received message.
+    It first validates the `X-Telegram-Bot-Api-Secret-Token` header to ensure that the request is authorized.
+    If the token is valid, it checks if the request method is `POST`. If it is, it parses the request body as JSON.
+    It then creates a `Message` object from the JSON data and checks the chat ID.
+    If the user is waiting for a value to be entered, it calls the `check_waiting` function.
+    Otherwise, it calls the `handlers` function to process the message.
+    If any exceptions occur during processing, it logs the error and sends a Telegram message with an error message.
+    If the request method is not `POST`, it returns an HTTPException with a 405 status code.
+    If the `X-Telegram-Bot-Api-Secret-Token` is invalid, it returns an HTTPException with a 401 status code.
+    If there is a JSON decoding error or validation error, it returns an HTTPException with a 400 status code.
     """
     # Get X-Telegram-Bot-Api-Secret-Token from headers
     x_telegram_bot_api_secret_token = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
-
     # Check if the X-Telegram-Bot-Api-Secret-Token is correct
     if x_telegram_bot_api_secret_token == config.SECRET_TOKEN_TG_WEBHOOK:
         if request.method == 'POST':
@@ -68,9 +74,11 @@ async def tg_webhooks(request: Request, config: Annotated[Settings, Depends(get_
 
                 # Check if user is waiting for a value to be entered
                 if "waiting_value" in status_user.values():
-                    await check_waiting(status_user, pool, message, bot, config) # Check if user is waiting for a value to be entered
+                    await check_waiting(status_user, pool, message, bot,
+                                        config)  # Check if user is waiting for a value to be entered
                 else:
-                    await handlers(pool, message, bot, config, status_user) # Process the message if user is not waiting for a value to be entered
+                    await handlers(pool, message, bot, config,
+                                   status_user)  # Process the message if user is not waiting for a value to be entered
             except Exception as exc:
                 log.error("An error occurred: %s", str(exc))
                 log.debug("Exception traceback", traceback.format_exc())

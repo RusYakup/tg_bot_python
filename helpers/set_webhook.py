@@ -16,15 +16,12 @@ def set_webhook(token: str, ngrok: str, secret_token: str) -> None:
         secret_token (str): The secret token for the webhook.
     Raises:
         SystemExit: If the webhook setup fails.
-    Returns:
-        None
     """
     try:
         webhook_url = f'https://api.telegram.org/bot{token}/setWebhook?url={ngrok}/tg_webhooks&secret_token={secret_token}'
         response = requests.post(webhook_url)
         if response.status_code == 200:
             log.info('Webhook setup successful')
-            return
         else:
             log.critical('Webhook setup failed: %s' + webhook_url + str(response.status_code))
             sys.exit(1)

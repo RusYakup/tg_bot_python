@@ -33,7 +33,6 @@ class Message(BaseModel):
     text: str
     location: Optional[Location] = None
 
-
 #
 #
 # class UpdateMessage(BaseModel):

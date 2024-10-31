@@ -1,16 +1,17 @@
+from decorators.decorators import log_database_query
 from postgres.sqlfactory import (select, where, order_by, limit, group_by)
 from postgres.database_adapters import execute_query
-from asyncpg import Pool
+from asyncpg import Pool, Record
 import logging
 import traceback
 from prometheus.couters import count_general_errors, instance_id
 
-
 log = logging.getLogger(__name__)
 
 
+@log_database_query
 async def execute_users_actions(pool: Pool, chat_id: int = None, from_ts: int = None, until_ts: int = None,
-                                limits: int = 1000):
+                                limits: int = 1000) -> [Record | int | None]:
     if pool is None:
         raise ValueError("Pool is None")
 
@@ -22,8 +23,8 @@ async def execute_users_actions(pool: Pool, chat_id: int = None, from_ts: int = 
     if until_ts is not None:
         conditions["ts"] = ("<", until_ts)
     try:
-        sql_select = select("statistic",[])
-        query, args = where(sql_select, conditions) #
+        sql_select = select("statistic", [])
+        query, args = where(sql_select, conditions)  #
         query = order_by(query, "ts", "DESC")
         query, args = limit(query, limits, args)
 
@@ -42,6 +43,7 @@ async def execute_users_actions(pool: Pool, chat_id: int = None, from_ts: int = 
     return res
 
 
+@log_database_query
 async def execute_actions_count(pool: Pool, chat_id: int):
     """ SELECT chat_id, DATE_TRUNC('month', to_timestamp(ts)) AS month, COUNT(*) AS actions_count FROM statistic
     WHERE chat_id = $1 GROUP BY chat_id, month

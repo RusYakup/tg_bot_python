@@ -13,6 +13,21 @@ log = logging.getLogger(__name__)
 
 
 async def startup():
+    """
+    Perform startup tasks:
+
+    1. Load settings using `get_settings()`.
+    2. Configure logging with `logging_config`.
+    3. Validate the bot token using `check_bot_token`.
+    4. Validate the API key using `check_api_key`.
+    5. Set up the webhook for the Telegram bot using `set_webhook`.
+    6. Create necessary database tables using `asyncio.run(create_table())`.
+    7. Increment counters
+    8. Start the scheduler to delete users online every 60 seconds using `AsyncIOScheduler`.
+    9. Start the FastAPI application using `uvicorn.Server.serve()`.
+
+    If any of the steps fail, exit with code 1.
+    """
     try:
         settings = get_settings()
         logging_config(settings.LOG_LEVEL)
@@ -25,27 +40,15 @@ async def startup():
         set_webhook(settings.TOKEN, settings.APP_DOMAIN, settings.SECRET_TOKEN_TG_WEBHOOK)
         await create_table(pool)
         await inc_counters()
-
+        scheduler = AsyncIOScheduler()
+        scheduler.add_job(del_users_online, 'interval', seconds=60, args=[pool], misfire_grace_time=10)
+        scheduler.start()
+        log.info("The scheduler has been started in the background")
         log.info("Startup completed successfully")
-        return pool
+        config = uvicorn.Config("src.app:app", host="0.0.0.0", port=8888, log_level="info")
+        server = uvicorn.Server(config)
+        await server.serve()
     except Exception as e:
         log.critical("Error during startup: %s", str(e))
         log.debug(f"Exception traceback:\n", traceback.format_exc())
         exit(1)
-
-
-async def run_uvicorn():
-    config = uvicorn.Config("src.app:app", host="0.0.0.0", port=8888, log_level="info")
-    server = uvicorn.Server(config)
-    await server.serve()
-
-
-async def main():
-    pool = await startup()
-
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(del_users_online, 'interval', seconds=60, args=[pool], misfire_grace_time=10)
-    scheduler.start()
-    log.info("The scheduler has been started in the background")
-
-    await run_uvicorn()

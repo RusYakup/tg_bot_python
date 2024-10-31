@@ -1,16 +1,18 @@
+import asyncpg
 from helpers.helpers import wind, get_response
 from helpers.models_weather import *
 from pydantic import ValidationError
 from datetime import datetime, date, timedelta
-from postgres.database_adapters import execute_query, sql_update_user_state_bd
+from postgres.database_adapters import sql_update_user_state_bd
 import aiohttp
 from postgres.sqlfactory import *
 from prometheus.couters import count_user_errors, count_general_errors, instance_id
+from decorators.decorators import log_database_query
 
 log = logging.getLogger(__name__)
 
 
-async def start_message(pool, message, bot):
+async def start_message(pool: asyncpg.Pool, message, bot):
     """
     Sends a welcome message to the user and initializes their state in the database.
     Args:
@@ -36,16 +38,13 @@ async def start_message(pool, message, bot):
             f'/prediction - prediction of the average temperature for 3 days\n'
             f'or simply press the menu to display all commands \n')
         await bot.send_message(message.chat.id, msg)
-        query = ("INSERT INTO user_state (chat_id, city, date_difference, qty_days) VALUES ($1, $2, $3, $4)"
-                 " ON CONFLICT (chat_id) DO NOTHING")
-        args = [message.chat.id, "Moskva", "None", "None"]
-        await execute_query(pool, query, *args, fetch=True)
     except Exception as e:
         log.error("An error occurred: %s", str(e))
         log.debug(traceback.format_exc())
         await bot.send_message(message.chat.id, 'An error occurred. Please try again later.')
 
 
+@log_database_query
 async def change_city(pool, message, bot):
     """
     Changes the city in the user state based on user input.
@@ -57,7 +56,6 @@ async def change_city(pool, message, bot):
     try:
         log.debug("User {message.chat.id} wants to change city")
         await bot.send_message(message.chat.id, 'Please enter the new city')
-        # query = "UPDATE user_state SET city = $1 WHERE chat_id = $2"
         await sql_update_user_state_bd(bot, pool, message, "city")
         log.debug(f" User {message.chat.id} waiting_value: city")
     except Exception as e:
@@ -66,6 +64,7 @@ async def change_city(pool, message, bot):
         await bot.send_message(message.chat.id, 'An error occurred. Please try again later.')
 
 
+@log_database_query
 async def add_city(pool, message, bot, config):
     """
     Add a new city to the user's preferences based on the message received.
@@ -80,7 +79,6 @@ async def add_city(pool, message, bot, config):
     None
     """
     try:
-        # Verify city
         log.debug("verify city")
         url = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={message.text}'
         async with aiohttp.ClientSession() as session:
@@ -92,7 +90,7 @@ async def add_city(pool, message, bot, config):
                 else:
                     await bot.send_message(message.chat.id, 'City not found. Please try again')
                     count_user_errors.labels(instance=instance_id).inc()
-                    log.debug("add_city: City not found.")
+                    log.debug("add_city: City not found: %s", message.text)
     except Exception as e:
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback: \n {traceback.format_exc()}")
@@ -133,10 +131,10 @@ async def weather(message, bot, config, status_user):
     """
     try:
 
-        log.debug(f"User requested current weather for': {status_user['city']}")
+        log.info(f"User requested current weather for': {status_user['city']}")
         url_current = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={status_user["city"]}'
         data = get_response(message, url_current, bot)
-        weather_data = WeatherData.parse_obj(data)
+        weather_data = WeatherData.model_validate(data)
         forecast = weather_data.forecast.forecastday[0].day
 
         current_msg = (
@@ -173,7 +171,7 @@ async def weather_forecast(pool, message, bot):
                                f'Input the date from {today_date} до {max_date}:')
         await sql_update_user_state_bd(bot, pool, message, "date_difference", "waiting_value")
 
-        log.info(f" User {message.chat.id} waiting_value: city")
+        log.info(f" User {message.chat.id} waiting_value: date_difference")
     except Exception as e:
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback: \n {traceback.format_exc()}")
@@ -212,11 +210,11 @@ async def get_weather_forecast(pool, date_difference, message, bot, config, stat
     Retrieves weather forecast based on the date difference for the user's city.
     """
     try:
-        log.debug(
+        log.info(
             f"User requested weather forecast {date_difference} days")
         url_forecast = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={status_user["city"]}&days={date_difference}&aqi=no&alerts=no'
         data = get_response(message, url_forecast, bot)
-        weather_data = WeatherData.parse_obj(data)
+        weather_data = WeatherData.model_validate(data)
         correction_num = int(date_difference) - 2
         forecast_msg = (
             f"{weather_data.location.name} ({weather_data.location.region}):{weather_data.forecast.forecastday[correction_num].date}\n"
@@ -226,8 +224,7 @@ async def get_weather_forecast(pool, date_difference, message, bot, config, stat
             f"Precipitation: {weather_data.forecast.forecastday[correction_num].day.daily_chance_of_rain if weather_data.current.temp_c > 0 else weather_data.forecast.forecastday[1].day.daily_chance_of_snow}%\n"
             f"{weather_data.forecast.forecastday[correction_num].day.condition.text}")
         await bot.send_message(message.chat.id, forecast_msg)
-        query = await sql_update_user_state_bd(bot, pool, message, "date_difference", "None")
-        # await execute(pool, *query, fetch=True)
+        await sql_update_user_state_bd(bot, pool, message, "date_difference", "None")
         log.info(f"weather_forecast: Success")
     except Exception as e:
         log.error("An error occurred: %s", str(e))
@@ -241,10 +238,10 @@ async def get_weather_forecast(pool, date_difference, message, bot, config, stat
 
 
 async def forecast_for_several_days(pool, message, bot):
+    """
+            A function to send a weather forecast message for several days and update user state with the number of days.
+            """
     try:
-        """
-        A function to send a weather forecast message for several days and update user state with the number of days.
-        """
         await bot.send_message(message.chat.id,
                                f'In this section, you can get the weather forecast for several days.\n'
                                f'Enter the number of days (from 1 to 10):')
@@ -257,13 +254,12 @@ async def forecast_for_several_days(pool, message, bot):
         return
 
 
-async def get_forecast_several(pool, message, bot, config, status_user):
+async def get_forecast_several(message, bot, config, status_user):
     """
     A function to get the weather forecast for several days based on user input.
     """
     try:
         qty_days = int(message.text)
-        log.debug(f"User requested weather forecast {qty_days} days: {status_user['city']}")
         if 1 <= qty_days <= 10:
             qty_days += 1
         else:
@@ -285,7 +281,7 @@ async def get_forecast_several(pool, message, bot, config, status_user):
                             f'q={status_user["city"]}&days={qty_days}&aqi=no&alerts=no')
     try:
         data = get_response(message, url_forecast_several, bot)
-        weather_data = WeatherData.parse_obj(data)
+        weather_data = WeatherData.model_validate(data)
         for day_num in range(1, len(weather_data.forecast.forecastday)):
             forecast = weather_data.forecast.forecastday[day_num]
             precipitation = weather_data.forecast.forecastday[day_num].day.condition
@@ -313,36 +309,42 @@ async def get_forecast_several(pool, message, bot, config, status_user):
 
 
 # need to fix
-async def statistic(pool, message, bot, config, status_user):
+async def statistic(message, bot, config, status_user):
     """
-    A function to retrieve weather statistics for a given city for the past week.
+    Retrieves and sends weather statistics for a given city for the past week.
 
     Parameters:
-    - pool: the connection pool
-    - message: the message object
-    - bot: the bot object for sending messages
-    - config: the configuration object
-    - status_user: the status of the user
-
-    Raises:
-    - Exception: if an error occurs during the process
-    - ValidationError: if there is a validation error
+    - pool (Pool): The database connection pool.
+    - message (Message): The message object containing the user's request.
+    - bot (AsyncTeleBot): The bot object for sending messages to the user.
+    - config (Settings): The application settings configuration.
+    - status_user (dict): The status of the user, including the city for which to retrieve weather statistics.
 
     Returns:
     - None
+
+    Raises:
+    - Exception: If an error occurs during the process.
+    - ValidationError: If there is a validation error in the received data.
+
+    Notes:
+    - This function sends a separate message for each day of the past week, containing the temperature and precipitation information for that day.
+    - The function uses the `get_response` function to retrieve data from the weather API.
+    - The function uses the `DayDetails`, `Condition`, and `Location` models to validate and parse the received data.
     """
+
     try:
+        log.info(f"User requested weather statistic: {status_user['city']}")
         today_date = date.today()
-        log.debug(f"User requested weather statistic: {status_user['city']}")
         for days in range(1, 8):
             #  TODO: duplication of code
             statistic_date = today_date - timedelta(days=days)
             url_statistic = f'https://api.weatherapi.com/v1/history.json?key={config.API_KEY}&q={status_user["city"]}&dt={statistic_date}'
             data = get_response(message, url_statistic, bot)
-            day_details = DayDetails.parse_obj(data['forecast']['forecastday'][0]['day'])
+            day_details = DayDetails.model_validate(data['forecast']['forecastday'][0]['day'])
             day_details_data = data['forecast']['forecastday'][0]['date']
-            precipitation = Condition.parse_obj(data['forecast']['forecastday'][0]['day']['condition'])
-            location = Location.parse_obj(data['location'])
+            precipitation = Condition.model_validate(data['forecast']['forecastday'][0]['day']['condition'])
+            location = Location.model_validate(data['location'])
             msg_statistic = (
                 f"{location.name} ({location.region}): {day_details_data}\n"
                 f"Temperature: Max: {day_details.maxtemp_c}°C, Min: {day_details.mintemp_c}°C, {precipitation.text} \n"
@@ -359,21 +361,20 @@ async def statistic(pool, message, bot, config, status_user):
         log.error(f"statistic : Validation error {e}")
 
 
-# need to fix
-async def prediction(pool, message, bot, config, status_user):
+async def prediction(message, bot, config, status_user):
     """
     A function to make weather predictions based on historical data and forecast for a specific city.
     """
     try:
         today_date = date.today()
-        log.debug(f"User requested weather prediction: {status_user['city']}")
+        log.info(f"User requested weather prediction: {status_user['city']}")
         avgtemp_c_7days = set()
         try:
             for days in range(1, 8):
                 statistic_date = today_date - timedelta(days=days)
                 url_prediction = f'https://api.weatherapi.com/v1/history.json?key={config.API_KEY}&q={status_user["city"]}&dt={statistic_date}'
                 data = get_response(message, url_prediction, bot)
-                day_details = DayDetails.parse_obj(data['forecast']['forecastday'][0]['day'])
+                day_details = DayDetails.model_validate(data['forecast']['forecastday'][0]['day'])
                 avgtemp_c_7days.add(day_details.avgtemp_c)
         except ValidationError as e:
             await bot.send_message(message.chat.id, f"Error")
@@ -386,7 +387,7 @@ async def prediction(pool, message, bot, config, status_user):
             url_forecast_several = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={status_user["city"]}&days=3&aqi=no&alerts=no'
             data = get_response(message, url_forecast_several, bot)
             for day_num in range(1, len(data['forecast']['forecastday'])):
-                weather_data = WeatherData.parse_obj(data)
+                weather_data = WeatherData.model_validate(data)
                 forecast_data = weather_data.forecast.forecastday[day_num]
                 avgtemp_c_3days.add(forecast_data.day.avgtemp_c)
 

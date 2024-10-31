@@ -4,7 +4,7 @@ import sys
 from telebot.async_telebot import AsyncTeleBot
 import logging
 import traceback
-from typing import Any
+from typing import Any, Dict
 from prometheus.couters import (count_api_weather_errors, count_user_errors, instance_id,
                                 count_failed_requests, request_duration, count_response_code_200,
                                 count_response_code_400, count_response_code_500, count_response_code_502,
@@ -47,7 +47,6 @@ def check_api_key(api_key: str) -> None:
     - None
     """
     url = f'http://api.weatherapi.com/v1/current.json?key={api_key}&q=Kazan'
-    # TODO: here can be exception -> need to catch it to avoid unexpected behaviour -> exit(1)
     try:
         response = requests.get(url)
         response.raise_for_status()
@@ -167,8 +166,7 @@ def weather_condition(precipitation: str) -> str:
         return precipitation
 
 
-# TODO: Incorrect annotation of output type. json - it's a module name. Not type
-def get_response(message, api_url: str, bot: AsyncTeleBot) -> Any:
+def get_response(message, api_url: str, bot: AsyncTeleBot) -> Dict[str, Any]:
     """
     A function to make a GET request to the provided API URL and handle different response status codes.
 

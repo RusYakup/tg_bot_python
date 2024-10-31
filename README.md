@@ -89,12 +89,13 @@ import sys
 from src.startup import startup
 from postgres.pool import DbPool
 from handlers.db_handlers import bd_router
-from handlers.web_hook_handler import webhook_router
+from handlers.tg_handler import webhook_router
 from prometheus_fastapi_instrumentator import Instrumentator
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
 log = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -113,6 +114,7 @@ async def lifespan(app: FastAPI):
             await DbPool.close_pool()
         except Exception as e:
             log.error(f"An error occurred while closing the database connection pool: {e}")
+
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(bd_router)

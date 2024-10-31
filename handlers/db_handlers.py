@@ -4,13 +4,10 @@ from postgres.database_adapters import verify_credentials
 from fastapi.security import HTTPBasicCredentials
 from handlers.db_query_builder import execute_users_actions, execute_actions_count
 import logging
-from asyncpg import Pool
+from asyncpg import Pool, Record
 from postgres.pool import DbPool
 from fastapi import HTTPException
 from prometheus.couters import count_general_errors, instance_id
-
-
-
 
 log = logging.getLogger(__name__)
 bd_router = APIRouter()
@@ -18,11 +15,11 @@ bd_router = APIRouter()
 
 @bd_router.get("/users_actions")
 async def ex_users_actions(chat_id: int = None,
-                            from_ts: int = None,
-                            until_ts: int = None,
-                            limits: int = 1000,
-                            credentials: HTTPBasicCredentials = Security(verify_credentials),
-                            pool: Pool = Depends(DbPool.get_pool)):
+                           from_ts: int = None,
+                           until_ts: int = None,
+                           limits: int = 1000,
+                           credentials: HTTPBasicCredentials = Security(verify_credentials),
+                           pool: Pool = Depends(DbPool.get_pool)) -> [Record | int | None]:
     """
       Retrieves user actions based on the provided criteria.
       Args:

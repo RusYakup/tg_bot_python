@@ -1,7 +1,6 @@
 version: "3.5"
 
 
-
 x-localtime: &host_localtime
   type: bind
   source: /etc/localtime
