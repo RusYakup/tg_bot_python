@@ -2,7 +2,7 @@ import logging
 from typing import Optional, List
 import traceback
 from typing import Dict, Tuple, Any
-from prometheus.couters import count_general_errors, instance_id
+from prometheus.couters import count_general_errors, instance_id, count_instance_errors
 
 log = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ def select(table_name: str, fields: list) -> str:
             fields = "*"
         return f"SELECT {fields} FROM {table_name}"
     except Exception as e:
-        count_general_errors.labels(instance=instance_id).inc()
+        count_instance_errors.labels(instance=instance_id).inc()
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback:\n{traceback.format_exc()}")
 
@@ -49,7 +49,7 @@ def delete(table_name: str) -> str:
         query = f"DELETE FROM {table_name}"
         return query
     except Exception as e:
-        count_general_errors.labels(instance=instance_id).inc()
+        count_instance_errors.labels(instance=instance_id).inc()
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback:\n{traceback.format_exc()}")
 
@@ -75,7 +75,7 @@ def where(sql: str, conditions: Dict[str, Tuple[str, Any]]) -> Tuple[str, list]:
         args = [value for _, (_, value) in conditions.items()]
         return query, args
     except Exception as e:
-        count_general_errors.labels(instance=instance_id).inc()
+        count_instance_errors.labels(instance=instance_id).inc()
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback:\n{traceback.format_exc()}")
 
@@ -99,7 +99,7 @@ def limit(sql: str, limit: int, args: List[any]) -> (str, List[any]):
     except TypeError as e:
         log.error(f"TypeError: {e}")
     except Exception as e:
-        count_general_errors.labels(instance=instance_id).inc()
+        count_instance_errors.labels(instance=instance_id).inc()
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback:\n{traceback.format_exc()}")
 
@@ -122,7 +122,7 @@ def order_by(sql: str, column_name: str, sort_order: str) -> str:
     try:
         return f"{sql} ORDER BY {column_name} {sort_order}"
     except Exception as e:
-        count_general_errors.labels(instance=instance_id).inc()
+        count_instance_errors.labels(instance=instance_id).inc()
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback:\n{traceback.format_exc()}")
 
@@ -145,7 +145,7 @@ def group_by(sql: str, columns: List[str]) -> str:
         group_by_clause = ", ".join(columns)
         return f"{sql} GROUP BY {group_by_clause}"
     except Exception as e:
-        count_general_errors.labels(instance=instance_id).inc()
+        count_instance_errors.labels(instance=instance_id).inc()
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback:\n{traceback.format_exc()}")
 
@@ -172,7 +172,7 @@ def update(table_name: str, fields: Dict[str, Any]) -> Tuple[str, List[Any]]:
         values = list(fields.values())
         return query, values
     except Exception as e:
-        count_general_errors.labels(instance=instance_id).inc()
+        count_instance_errors.labels(instance=instance_id).inc()
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback:\n{traceback.format_exc()}")
 
@@ -214,6 +214,6 @@ def insert(table_name: str, fields: Dict[str, Any], on_conflict: Optional[str] =
         return sql, args
 
     except Exception as e:
-        count_general_errors.labels(instance=instance_id).inc()
+        count_instance_errors.labels(instance=instance_id).inc()
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback:\n{traceback.format_exc()}")

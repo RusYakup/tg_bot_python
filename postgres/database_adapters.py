@@ -4,16 +4,12 @@ import traceback
 from fastapi.security import HTTPBasicCredentials, HTTPBasic
 from fastapi import HTTPException, Depends
 from decorators.decorators import log_database_query
-from prometheus.couters import count_database_errors, instance_id, current_users_gauge
+from prometheus.couters import instance_id, database_errors_counters, count_instance_errors
 from config.config import get_settings, Settings
 from postgres.sqlfactory import update, where, insert, delete
 from asyncpg import Pool
 from postgres.pool import DbPool
-from datetime import datetime
-import time
 from typing import Union, Optional
-import asyncio
-import datetime
 
 log = logging.getLogger(__name__)
 security = HTTPBasic()
@@ -90,9 +86,8 @@ async def create_table(pool: Pool = Depends(DbPool.get_pool)):
 
 
 @log_database_query
-async def sql_update_user_state_bd(bot, pool: asyncpg.Pool, message, fields, new_state: str = "waiting_value"):
+async def sql_update_user_state_bd(bot, pool: asyncpg.Pool, message, fields: str, new_state: str = "waiting_value"):
     try:
-        # query = "UPDATE user_state SET city = $1 WHERE chat_id = $2"
         update_query, args = update("user_state", {fields: new_state})
 
         conditions = {
@@ -106,6 +101,7 @@ async def sql_update_user_state_bd(bot, pool: asyncpg.Pool, message, fields, new
         else:
             log.info(f"User {message.chat.id} {fields} updated successfully")
     except Exception as e:
+        count_instance_errors.labels(instance=instance_id).inc()
         await bot.send_message(message.chat.id, "An error occurred. Please try again later.")
         log.error(f"An error occurred during user state adding: {e}")
         log.debug("Exception traceback:", traceback.format_exc())
@@ -141,6 +137,7 @@ async def add_statistic_bd(pool: asyncpg.Pool, message):
         else:
             return None
     except Exception as e:
+        count_instance_errors.labels(instance=instance_id).inc()
         log.error(f"An error occurred during statistic adding: {e}")
         log.error("Exception traceback:", traceback.format_exc())
 
@@ -185,55 +182,56 @@ async def execute_query(pool: asyncpg.Pool, query: str, *args,
                     else:
                         result = None
             return result
-        except RuntimeError:
-            await asyncio.sleep(0.1)
-            retries += 1
         except asyncpg.PostgresError as e:
             log.error(f"Database error: {e} {traceback.format_exc()}")
-            count_database_errors.labels(instance=instance_id).inc()
+            database_errors_counters[0].labels(instance=instance_id).inc()  # database_connection_errors
+        except asyncpg.QueryCanceledError as e:
+            log.error(f"Query canceled error: {e} {traceback.format_exc()}")
+            database_errors_counters[1].labels(instance=instance_id).inc()  # database_query_errors
         except Exception as e:
             log.error(f"Unexpected error: {e} {traceback.format_exc()} {query} {args}")
+            database_errors_counters[2].labels(instance=instance_id).inc()  # database_other_errors
     raise Exception("Max retries exceeded")
 
+# @log_database_query
+# async def add_user_id(chat_id, pool: Pool = Depends(DbPool.get_pool)):
+#     timestamp = int(datetime.datetime.now().timestamp())
+#
+#     try:
+#         sql_update, args_update = update("users_online", {"timestamp": timestamp})
+#         conditions = {
+#             "chat_id": ("=", chat_id)
+#         }
+#         query_where, args = where(sql_update, conditions)
+#         args_where = args_update + args
+#         res = await execute_query(pool, query_where, *args_where, execute=True)
+#         if res == "UPDATE 0":
+#             sql_insert, args = insert("users_online", {"chat_id": chat_id, "timestamp": timestamp})
+#             # current_users_gauge.labels(instance=instance_id).inc()
+#             await execute_query(pool, sql_insert, *args, execute=True)
+#     except Exception as e:
+#         log.error(f"An error occurred during user state adding: {e}")
+#         log.debug("Exception traceback:", traceback.format_exc())
+#
 
-@log_database_query
-async def add_user_id(chat_id, pool: Pool = Depends(DbPool.get_pool)):
-    timestamp = int(datetime.datetime.now().timestamp())
-
-    try:
-        sql_update, args_update = update("users_online", {"timestamp": timestamp})
-        conditions = {
-            "chat_id": ("=", chat_id)
-        }
-        query_where, args = where(sql_update, conditions)
-        args_where = args_update + args
-        res = await execute_query(pool, query_where, *args_where, execute=True)
-        if res == "UPDATE 0":
-            sql_insert, args = insert("users_online", {"chat_id": chat_id, "timestamp": timestamp})
-            current_users_gauge.labels(instance=instance_id).inc()
-            await execute_query(pool, sql_insert, *args, execute=True)
-    except Exception as e:
-        log.error(f"An error occurred during user state adding: {e}")
-        log.debug("Exception traceback:", traceback.format_exc())
-
-
-@log_database_query
-async def del_users_online(pool: asyncpg.Pool):
-    try:
-        log.debug("Starting the task: del_users_online")
-        res = delete("users_online")
-        sql, args = where(res, {"timestamp": ("<", int(time.time()) - 60)})  # 60 seconds test
-        res = await execute_query(pool, sql, *args, execute=True)
-        result_parts = res.split()
-        deleted_count = int(result_parts[1]) if len(result_parts) == 2 else 0
-        if deleted_count >= 1:
-            log.info(f"Deleted {deleted_count} users online")
-            current_value = current_users_gauge.labels(instance=instance_id)._value.get()
-            if current_value > 0:
-                current_users_gauge.labels(instance=instance_id).dec()
-            else:
-                log.info(f"Current users count for instance {instance_id} is already zero and cannot be decremented.")
-        else:
-            log.info("No users online were deleted")
-    except Exception as e:
-        log.error(f"Error в del_users_online: {e}")
+# @log_database_query
+# async def del_users_online(pool: asyncpg.Pool):
+#
+#     try:
+#         log.debug("Starting the task: del_users_online")
+#         res = delete("users_online")
+#         sql, args = where(res, {"timestamp": ("<", int(time.time()) - 60)})  # 60 seconds test
+#         res = await execute_query(pool, sql, *args, execute=True)
+#         result_parts = res.split()
+#         deleted_count = int(result_parts[1]) if len(result_parts) == 2 else 0
+#         if deleted_count >= 1:
+#             log.info(f"Deleted {deleted_count} users online")
+#             # current_value = current_users_gauge.labels(instance=instance_id)._value.get()
+#             # if current_value > 0:
+#             #     current_users_gauge.labels(instance=instance_id).dec()
+#             # else:
+#             #     log.info(f"Current users count for instance {instance_id} is already zero and cannot be decremented.")
+#         else:
+#             log.info("No users online were deleted")
+#     except Exception as e:
+#         log.error(f"Error в del_users_online: {e}")

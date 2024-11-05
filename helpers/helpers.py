@@ -5,11 +5,8 @@ from telebot.async_telebot import AsyncTeleBot
 import logging
 import traceback
 from typing import Any, Dict
-from prometheus.couters import (count_api_weather_errors, count_user_errors, instance_id,
-                                count_failed_requests, request_duration, count_response_code_200,
-                                count_response_code_400, count_response_code_500, count_response_code_502,
-                                count_response_code_401, count_response_code_403, count_response_code_404,
-                                unauthorized_access_counter, count_instance_errors)
+from prometheus.couters import (count_user_errors, instance_id,
+                                 count_instance_errors)
 
 log = logging.getLogger(__name__)
 
@@ -105,9 +102,6 @@ def wind(win_dir: str, wind_kph: float, max_wind_kph: float) -> str:
 
 
 def weather_condition(precipitation: str) -> str:
-    # TODO: some messages send to chat using Russian, some using English. Need to use one language for interaction with user.
-    # TODO: You can add command /set_language to adjust language by user. By default it can by English. Store use language in table in the future
-    #  Need to prepare dictionary with of all sentences that used to communicate with user in English and Russian
     weather_dict = {
         "Sunny": "Солнечно",
         "Partly cloudy": "Переменная облачность",
@@ -181,16 +175,11 @@ def get_response(message, api_url: str, bot: AsyncTeleBot) -> Dict[str, Any]:
     try:
         response = requests.get(api_url)
         data = json.loads(response.text)
-        request_duration.labels(instance=instance_id).observe(response.elapsed.total_seconds())
         if response.status_code == 200:
             logging.debug("Response 200")
-            count_response_code_200.labels(instance=instance_id).inc()
-
             return json.loads(response.text)
-
         elif response.status_code == 400:
             error_code = data.get('error', {}).get('code')
-            count_response_code_400.labels(instance=instance_id).inc()
             if error_code == 1005:
                 bot.send_message(message.chat.id, "Invalid API request URL. Please try again later.")
                 logging.error(
@@ -207,23 +196,16 @@ def get_response(message, api_url: str, bot: AsyncTeleBot) -> Dict[str, Any]:
                 bot.send_message(message.chat.id, "Unknown error. Please try again later.")
                 logging.error(f"Unknown error - Response 400 code {data.get('error', {}).get('message')}")
                 logging.debug(f"Exception traceback: \n {traceback.format_exc()}")
-            count_failed_requests.labels(instance=instance_id).inc()
-
         elif response.status_code == 401:
             error_code = data.get('error', {}).get('code')
-            count_response_code_401.labels(instance=instance_id).inc()
             if error_code == 1002:
                 bot.send_message(message.chat.id, "API key not provided. Please contact support.")
                 logging.error(f"API key not provided - Response 401: code 1002 {data.get('error', {}).get('message')}")
             elif error_code == 2006:
                 bot.send_message(message.chat.id, "The provided API key is invalid. Please contact support.")
                 logging.error(f"Invalid API key - Response 401: code 2006 {data.get('error', {}).get('message')}")
-            unauthorized_access_counter.labels(instance=instance_id).inc()
-            count_failed_requests.labels(instance=instance_id).inc()
-
         elif response.status_code == 403:
             error_code = data.get('error', {}).get('code')
-            count_response_code_403.labels(instance=instance_id).inc()
             if error_code == 2007:
                 bot.send_message(message.chat.id,
                                  "API key has exceeded the monthly call quota. Please contact support.")
@@ -237,44 +219,24 @@ def get_response(message, api_url: str, bot: AsyncTeleBot) -> Dict[str, Any]:
                                  "API key does not have access to the requested resource. Please contact support.")
                 logging.error(
                     f"API key does not have access - Response 403: code 2009 {data.get('error', {}).get('message')}")
-            count_api_weather_errors.labels(instance=instance_id).inc()
-            count_failed_requests.labels(instance=instance_id).inc()
-
         elif response.status_code == 404:
             bot.send_message(message.chat.id,
                              "Requested resource not found, please try again later or contact support.")
             logging.error("Response 404: Not found")
-            count_response_code_404.labels(instance=instance_id).inc()
-            count_api_weather_errors.labels(instance=instance_id).inc()
-            count_failed_requests.labels(instance=instance_id).inc()
-
         elif response.status_code == 500:
             bot.send_message(message.chat.id, "Internal server error. Please try again later.")
             logging.error("Response 500: Internal server error")
-            count_response_code_500.labels(instance=instance_id).inc()
-            count_api_weather_errors.labels(instance=instance_id).inc()
-            count_failed_requests.labels(instance=instance_id).inc()
-
         elif response.status_code == 502:
             bot.send_message(message.chat.id, "Bad gateway error. Please try again later.")
             logging.error("Response 502: Bad gateway")
-            count_response_code_502.labels(instance=instance_id).inc()
-            count_api_weather_errors.labels(instance=instance_id).inc()
-            count_failed_requests.labels(instance=instance_id).inc()
-
         else:
             bot.send_message(message.chat.id, "Error retrieving weather data, please try again later.")
             logging.error(f"Response {response.status_code}: {data.get('error', {}).get('message')}")
-            count_api_weather_errors.labels(instance=instance_id).inc()
-            count_failed_requests.labels(instance=instance_id).inc()
-
     except Exception as e:
+        count_instance_errors.labels(instance=instance_id).inc()
         bot.send_message(message.chat.id, "An error occurred")
         logging.error(f"Error in get_response: {str(e)}")
         logging.debug(f"Exception:\n {traceback.format_exc()}")
-        count_api_weather_errors.labels(instance=instance_id).inc()
-        count_failed_requests.labels(instance=instance_id).inc()
-        count_instance_errors.labels(instance=instance_id).inc()
 
 
 def logging_config(log_level: str) -> None:

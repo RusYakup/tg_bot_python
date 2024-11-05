@@ -1,4 +1,3 @@
-
 from asyncpg import Pool
 from typing import Optional
 

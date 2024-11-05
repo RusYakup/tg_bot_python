@@ -19,7 +19,7 @@ async def ex_users_actions(chat_id: int = None,
                            until_ts: int = None,
                            limits: int = 1000,
                            credentials: HTTPBasicCredentials = Security(verify_credentials),
-                           pool: Pool = Depends(DbPool.get_pool)) -> [Record | int | None]:
+                           pool: Pool = Depends(DbPool.get_pool)):
     """
       Retrieves user actions based on the provided criteria.
       Args:

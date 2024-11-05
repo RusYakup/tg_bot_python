@@ -1,8 +1,8 @@
+import asyncio
 import uvicorn
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from helpers.helpers import check_bot_token, check_api_key, logging_config
 from helpers.set_webhook import set_webhook
-from postgres.database_adapters import create_table, del_users_online
+from postgres.database_adapters import create_table
 import logging
 from config.config import get_settings
 import traceback
@@ -31,23 +31,17 @@ async def startup():
     try:
         settings = get_settings()
         logging_config(settings.LOG_LEVEL)
-
         await DbPool.create_pool()
         pool = await DbPool.get_pool()
-
         check_bot_token(settings.TOKEN)
         check_api_key(settings.API_KEY)
         set_webhook(settings.TOKEN, settings.APP_DOMAIN, settings.SECRET_TOKEN_TG_WEBHOOK)
-        await create_table(pool)
+        await asyncio.gather(create_table(pool))
         await inc_counters()
-        scheduler = AsyncIOScheduler()
-        scheduler.add_job(del_users_online, 'interval', seconds=60, args=[pool], misfire_grace_time=10)
-        scheduler.start()
-        log.info("The scheduler has been started in the background")
-        log.info("Startup completed successfully")
         config = uvicorn.Config("src.app:app", host="0.0.0.0", port=8888, log_level="info")
         server = uvicorn.Server(config)
         await server.serve()
+        log.info("Startup completed successfully")
     except Exception as e:
         log.critical("Error during startup: %s", str(e))
         log.debug(f"Exception traceback:\n", traceback.format_exc())

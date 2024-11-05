@@ -8,7 +8,7 @@ from decorators.decorators import log_database_query
 from postgres.database_adapters import execute_query, add_statistic_bd, sql_update_user_state_bd
 from asyncpg.pool import Pool
 from postgres.sqlfactory import select, where, insert, update
-from prometheus.couters import (unknown_command_counter, error_counter, total_users_counter, instance_id, )
+from prometheus.couters import (unknown_command_counter, error_counter, instance_id, count_instance_errors)
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +44,7 @@ async def check_chat_id(pool: Pool, message):
         log.debug("user_state table updated successfully")
         return decoded_result
     except Exception as e:
+        count_instance_errors.labels(instance=instance_id).inc()
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback: \n {traceback.format_exc()}")
 
@@ -70,6 +71,7 @@ async def check_waiting(status_user: dict, pool, message, bot: AsyncTeleBot, con
             await get_forecast_several(message, bot, config, status_user)
             await sql_update_user_state_bd(bot, pool, message, "qty_days", "None")
     except Exception as e:
+        count_instance_errors.labels(instance=instance_id).inc()
         await bot.send_message(message.chat.id, 'An error occurred. Please try again later.')
         log.error("An error occurred: %s", str(e))
         log.debug("Exception traceback", traceback.format_exc())
@@ -115,7 +117,7 @@ async def handlers(pool, message, bot, config, status_user):
             unknown_command_counter.labels(instance=instance_id).inc()  # Count the number of unknown commands
             await bot.send_message(message.chat.id, 'Unknown command. Please try again\n/help')
     except Exception as e:
-        error_counter.labels(instance=instance_id).inc()  # Count the number of errors
+        count_instance_errors.labels(instance=instance_id).inc()
         await bot.send_message(message.chat.id,
                                'An error occurred. Please send administrators a message or contact support.')
         log.error("An error occurred: %s", str(e))

@@ -1,0 +1,17 @@
+api Version: 1
+datasources:
+
+
+  - name: Prometheus
+    type: prometheus
+    url: http://prometheus:9090
+    access: proxy
+    isDefault: true
+
+  - name: PostgreSQL
+    type: postgres
+    url: ${PG_HOST}:${PG_PORT}/${PG_DATABASE}
+    user: ${PG_USER}
+    password: ${PG_PASSWORD}
+    access: proxy
+    isDefault: true
