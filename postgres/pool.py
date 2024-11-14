@@ -23,7 +23,7 @@ class DbPool:
 
 
     @classmethod
-    async  def get_pool(cls):
+    async def get_pool(cls):
         if not cls._db_pool:
             raise UninitializedDatabasePoolError()
         return cls._db_pool

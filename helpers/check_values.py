@@ -8,7 +8,7 @@ from decorators.decorators import log_database_query
 from postgres.database_adapters import execute_query, add_statistic_bd, sql_update_user_state_bd
 from asyncpg.pool import Pool
 from postgres.sqlfactory import select, where, insert, update
-from prometheus.couters import (unknown_command_counter, error_counter, instance_id, count_instance_errors)
+from prometheus.couters import (unknown_command_counter, instance_id, count_instance_errors)
 
 log = logging.getLogger(__name__)
 

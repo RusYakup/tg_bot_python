@@ -1,17 +1,17 @@
 from decorators.decorators import log_database_query
 from postgres.sqlfactory import (select, where, order_by, limit, group_by)
 from postgres.database_adapters import execute_query
-from asyncpg import Pool, Record
+from asyncpg import Pool
 import logging
 import traceback
-from prometheus.couters import count_general_errors, instance_id
+from prometheus.couters import instance_id
 
 log = logging.getLogger(__name__)
 
 
 @log_database_query
 async def execute_users_actions(pool: Pool, chat_id: int = None, from_ts: int = None, until_ts: int = None,
-                                limits: int = 1000) -> [Record | int | None]:
+                                limits: int = 1000):
     if pool is None:
         raise ValueError("Pool is None")
 
@@ -37,7 +37,6 @@ async def execute_users_actions(pool: Pool, chat_id: int = None, from_ts: int = 
     except Exception as e:
         log.error("execute_users_actions:An error occurred: %s", str(e))
         log.debug(f"execute_users_actions: Exception traceback: \n {traceback.format_exc()}")
-        count_general_errors.labels(instance=instance_id).inc()
         raise
 
     return res
@@ -67,4 +66,3 @@ async def execute_actions_count(pool: Pool, chat_id: int):
     except Exception as e:
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback:\n{traceback.format_exc()}")
-        count_general_errors.labels(instance=instance_id).inc()

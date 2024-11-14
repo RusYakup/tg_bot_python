@@ -1,6 +1,5 @@
 version: "3.5"
 
-
 x-localtime: &host_localtime
   type: bind
   source: /etc/localtime
@@ -16,6 +15,57 @@ x-logging: &logging
       max-file: ${LOG_MAX_FILE:-1}
 
 services:
+  loki:
+    image: grafana/loki
+    <<: *logging
+    container_name: loki
+    restart: always
+    environment:
+      - ENV_VAR_LOKI_RETENTION_PERIOD=${LOGS_STORAGE_RETENTION_PERIOD:-7d}
+      - ENV_VAR_LOKI_MAX_STREAMS_PER_USER=100000
+      - ENV_VAR_LOKI_RETENTION_DELETE_DELAY=10m
+      - LOKI_LISTEN_PORT=3100
+    ports:
+      - "3100:3100"
+    deploy:
+      resources:
+        limits:
+          cpus: ${LOKI_CPU_LIMIT:-1.5}
+          memory: ${LOKI_MEMORY_LIMIT:-2048M}
+        reservations:
+          cpus: ${LOKI_CPU_REQUESTS:-0.25}
+          memory: ${LOKI_MEMORY_REQUESTS:- 128M}
+    volumes:
+      - *host_localtime
+      - ./monitoring-init/loki/loki.conf:/loki/etc/loki.conf
+    #      - type: volume
+    #        source: loki_data
+    #        target: /loki
+    networks:
+      - internal
+      - external
+
+  promtail:
+    image: grafana/promtail
+    <<: *logging
+    container_name: promtail
+    environment:
+      - VAR_ENV_PROMTAIL_CLIENT=${LOKI_ADDRESS-http://loki:3100}/loki/api/v1/push
+    ports:
+      - "9080:9080"
+    volumes:
+      - *host_localtime
+      - /var/lib/docker/containers:/var/lib/docker/containers
+      - ../monitoring_init/promtail:/etc/promtail/
+    command: -config.file=/etc/promtail/docker-promtail-config.yml -config.expand-env=true
+    networks:
+      - internal
+      - external
+
+  # [ volumes definition ]
+  #  volumes:
+  #    loki_data:
+  #      driver: local
 
   ngrok:
     image: ngrok/ngrok:latest
@@ -28,9 +78,10 @@ services:
     command: http --domain=${APP_DOMAIN:?err} 8888
     network_mode: host
 
-
   weather_bot:
-    image: yakuptest/weather_bot:latest
+    #    image: yakuptest/weather_bot:0.0.30
+    build: ../.
+
     container_name: weather_tg_bot_build
     env_file:
       - /home/rustam/tg_env/.env
@@ -59,12 +110,11 @@ services:
     networks:
       - external
 
-
   postgres:
     image: postgres:15.2
     restart: always
-#    env_file:
-#      - /home/rustam/tg_env/.env
+    #    env_file:
+    #      - /home/rustam/tg_env/.env
     environment:
       - POSTGRES_USER=${POSTGRES_USER:?err}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?err}
@@ -83,7 +133,6 @@ services:
       - external
     <<: *logging
 
-
   postgres_exporter:
     image: prometheuscommunity/postgres-exporter
     env_file:
@@ -101,9 +150,8 @@ services:
     networks:
       - external
 
-
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.55.1
     container_name: prometheus
     user: root
     ports:
@@ -131,6 +179,7 @@ services:
       - GF_DATABASE_PASSWORD=grafana_yakup
     volumes:
       - ../monitoring_init/grafana/datasource/:/etc/grafana/provisioning/datasources/
+      - ../monitoring_init/grafana/dashboards/:/etc/grafana/provisioning/dashboards/
     ports:
       - "3000:3000"
     depends_on:
@@ -139,8 +188,6 @@ services:
     networks:
       - external
     <<: *logging
-
-
 networks:
   internal:
     name: bot_internal

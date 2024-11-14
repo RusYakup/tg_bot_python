@@ -45,7 +45,7 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(bd_router)
 app.include_router(webhook_router)
 
-instrumentator = Instrumentator().instrument(app).expose(app, include_in_schema=False, should_gzip=True)
+instrumental = Instrumentator().instrument(app).expose(app, include_in_schema=False, should_gzip=True)
 
 if __name__ == "__main__":
     try:

@@ -20,7 +20,7 @@
 #    action VARCHAR(50)
 #  );
 #
-#  CREATE TABLE IF NOT EXISTS users_online (
+#  CREATE TABLE IF NOT EXISTS userspg_online (
 #    chat_id INTEGER NOT NULL UNIQUE,
 #    timestamp INTEGER NOT NULL
 #  );

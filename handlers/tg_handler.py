@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from typing import Annotated
 from fastapi import Request, HTTPException, Depends, APIRouter
 from postgres.pool import DbPool
-from prometheus.couters import instance_id, count_general_errors, count_instance_errors
+from prometheus.couters import instance_id, count_instance_errors, validation_error
 
 log = logging.getLogger(__name__)
 
@@ -63,6 +63,7 @@ async def tg_webhooks(request: Request, config: Annotated[Settings, Depends(get_
             except ValidationError:
                 log.error("ValidationError occurred Message")
                 log.debug(traceback.format_exc())
+                validation_error.labels(instance=instance_id).inc(0)
                 raise HTTPException(status_code=400,
                                     detail="ValidationError: An error occurred, please try again later")
             try:

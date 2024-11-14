@@ -4,10 +4,11 @@ from helpers.models_weather import *
 from pydantic import ValidationError
 from datetime import datetime, date, timedelta
 from postgres.database_adapters import sql_update_user_state_bd
-import aiohttp
 import logging
 import traceback
-from prometheus.couters import count_user_errors, count_general_errors, instance_id, count_instance_errors
+from prometheus.couters import count_user_errors, instance_id, count_instance_errors, validation_error
+
+validation_error
 from decorators.decorators import log_database_query
 
 log = logging.getLogger(__name__)
@@ -84,16 +85,11 @@ async def add_city(pool, message, bot, config):
     try:
         log.debug("verify city")
         url = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={message.text}'
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                if response.status == 200:
-                    await sql_update_user_state_bd(bot, pool, message, "city", message.text)
-                    log.debug(f"User {message.chat.id} added new city: {message.text}")
-                    await bot.send_message(message.chat.id, 'City added successfully. Select the next command.')
-                else:
-                    await bot.send_message(message.chat.id, 'City not found. Please try again')
-                    count_user_errors.labels(instance=instance_id).inc()
-                    log.debug("add_city: City not found: %s", message.text)
+        responses = await get_response(message, url, bot)
+        if responses:
+            await sql_update_user_state_bd(bot, pool, message, "city", message.text)
+            log.debug(f"User {message.chat.id} added new city: {message.text}")
+            await bot.send_message(message.chat.id, 'City added successfully. Select the next command.')
     except Exception as e:
         log.error("An error occurred: %s", str(e))
         log.debug(f"Exception traceback: \n {traceback.format_exc()}")
@@ -138,7 +134,7 @@ async def weather(message, bot, config, status_user):
 
         log.info(f"User requested current weather for': {status_user['city']}")
         url_current = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={status_user["city"]}'
-        data = get_response(message, url_current, bot)
+        data = await get_response(message, url_current, bot)
         weather_data = WeatherData.model_validate(data)
         forecast = weather_data.forecast.forecastday[0].day
 
@@ -161,6 +157,7 @@ async def weather(message, bot, config, status_user):
         await bot.send_message(message.chat.id, f"Error")
     except ValidationError as e:
         log.error(f"Data validation error {e}")
+        validation_error.labels(instance=instance_id).inc(0)
         await bot.send_message(message.chat.id, 'An error occurred. Please try again later.')
 
 
@@ -218,7 +215,7 @@ async def get_weather_forecast(pool, date_difference, message, bot, config, stat
         log.info(
             f"User requested weather forecast {date_difference} days")
         url_forecast = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={status_user["city"]}&days={date_difference}&aqi=no&alerts=no'
-        data = get_response(message, url_forecast, bot)
+        data = await get_response(message, url_forecast, bot)
         weather_data = WeatherData.model_validate(data)
         correction_num = int(date_difference) - 2
         forecast_msg = (
@@ -238,6 +235,7 @@ async def get_weather_forecast(pool, date_difference, message, bot, config, stat
         count_instance_errors.labels(instance=instance_id).inc()
     except ValidationError as e:
         await bot.send_message(message.chat.id, f"Error data validation, please try again later.")
+        validation_error.labels(instance=instance_id).inc(0)
         log.error(f"weather_forecast: Validation error {e}")
         log.debug(f"Exception traceback: \n {traceback.format_exc()}")
 
@@ -256,7 +254,6 @@ async def forecast_for_several_days(pool, message, bot):
         log.debug(f"Exception traceback: \n {traceback.format_exc()}")
         await bot.send_message(message.chat.id, 'An error occurred. Please try again later.')
         count_instance_errors.labels(instance=instance_id).inc()
-
 
 
 async def get_forecast_several(message, bot, config, status_user):
@@ -284,7 +281,7 @@ async def get_forecast_several(message, bot, config, status_user):
     url_forecast_several = (f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&'
                             f'q={status_user["city"]}&days={qty_days}&aqi=no&alerts=no')
     try:
-        data = get_response(message, url_forecast_several, bot)
+        data = await get_response(message, url_forecast_several, bot)
         weather_data = WeatherData.model_validate(data)
         for day_num in range(1, len(weather_data.forecast.forecastday)):
             forecast = weather_data.forecast.forecastday[day_num]
@@ -307,9 +304,9 @@ async def get_forecast_several(message, bot, config, status_user):
         return
     except ValidationError as e:
         await bot.send_message(message.chat.id, f"Error data validation, please try again later.")
+        validation_error.labels(instance=instance_id).inc(0)
         log.error(f"forecast_for_several_days: Validation error {e}")
         log.debug(f"Exception traceback: \n {traceback.format_exc()}")
-
 
 
 # need to fix
@@ -343,7 +340,7 @@ async def statistic(message, bot, config, status_user):
             #  TODO: duplication of code
             statistic_date = today_date - timedelta(days=days)
             url_statistic = f'https://api.weatherapi.com/v1/history.json?key={config.API_KEY}&q={status_user["city"]}&dt={statistic_date}'
-            data = get_response(message, url_statistic, bot)
+            data = await get_response(message, url_statistic, bot)
             day_details = DayDetails.model_validate(data['forecast']['forecastday'][0]['day'])
             day_details_data = data['forecast']['forecastday'][0]['date']
             precipitation = Condition.model_validate(data['forecast']['forecastday'][0]['day']['condition'])
@@ -360,6 +357,7 @@ async def statistic(message, bot, config, status_user):
         await bot.send_message(message.chat.id, f"Error")
         count_instance_errors.labels(instance=instance_id).inc()
     except ValidationError as e:
+        validation_error.labels(instance=instance_id).inc(0)
         await bot.send_message(message.chat.id, f"Error")
         log.error(f"statistic : Validation error {e}")
 
@@ -376,10 +374,11 @@ async def prediction(message, bot, config, status_user):
             for days in range(1, 8):
                 statistic_date = today_date - timedelta(days=days)
                 url_prediction = f'https://api.weatherapi.com/v1/history.json?key={config.API_KEY}&q={status_user["city"]}&dt={statistic_date}'
-                data = get_response(message, url_prediction, bot)
+                data = await get_response(message, url_prediction, bot)
                 day_details = DayDetails.model_validate(data['forecast']['forecastday'][0]['day'])
                 avgtemp_c_7days.add(day_details.avgtemp_c)
         except ValidationError as e:
+            validation_error.labels(instance=instance_id).inc(0)
             await bot.send_message(message.chat.id, f"Error")
             log.error(f"prediction: Validation error {e}")
             log.debug(f"Exception traceback: \n {traceback.format_exc()}")
@@ -388,7 +387,7 @@ async def prediction(message, bot, config, status_user):
         avgtemp_c_3days = set()
         for days in range(3):
             url_forecast_several = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={status_user["city"]}&days=3&aqi=no&alerts=no'
-            data = get_response(message, url_forecast_several, bot)
+            data = await get_response(message, url_forecast_several, bot)
             for day_num in range(1, len(data['forecast']['forecastday'])):
                 weather_data = WeatherData.model_validate(data)
                 forecast_data = weather_data.forecast.forecastday[day_num]

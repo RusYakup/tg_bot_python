@@ -2,7 +2,7 @@ import logging
 from typing import Optional, List
 import traceback
 from typing import Dict, Tuple, Any
-from prometheus.couters import count_general_errors, instance_id, count_instance_errors
+from prometheus.couters import  instance_id, count_instance_errors
 
 log = logging.getLogger(__name__)
 

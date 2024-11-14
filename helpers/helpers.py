@@ -1,4 +1,6 @@
 import json
+
+import aiohttp
 import requests
 import sys
 from telebot.async_telebot import AsyncTeleBot
@@ -6,7 +8,7 @@ import logging
 import traceback
 from typing import Any, Dict
 from prometheus.couters import (count_user_errors, instance_id,
-                                 count_instance_errors)
+                                count_instance_errors, external_api_error)
 
 log = logging.getLogger(__name__)
 
@@ -47,7 +49,6 @@ def check_api_key(api_key: str) -> None:
     try:
         response = requests.get(url)
         response.raise_for_status()
-
         log.info("The API key is correct.")
     except requests.exceptions.RequestException as e:
         log.critical("Error verifying API key")
@@ -160,7 +161,7 @@ def weather_condition(precipitation: str) -> str:
         return precipitation
 
 
-def get_response(message, api_url: str, bot: AsyncTeleBot) -> Dict[str, Any]:
+async def get_response(message, api_url: str, bot: AsyncTeleBot) -> Dict[str, Any]:
     """
     A function to make a GET request to the provided API URL and handle different response status codes.
 
@@ -173,77 +174,82 @@ def get_response(message, api_url: str, bot: AsyncTeleBot) -> Dict[str, Any]:
     - Any: The JSON response from the API if the status code is 200, otherwise appropriate error messages are sent to the user.
     """
     try:
-        response = requests.get(api_url)
-        data = json.loads(response.text)
-        if response.status_code == 200:
-            logging.debug("Response 200")
-            return json.loads(response.text)
-        elif response.status_code == 400:
-            error_code = data.get('error', {}).get('code')
-            if error_code == 1005:
-                bot.send_message(message.chat.id, "Invalid API request URL. Please try again later.")
-                logging.error(
-                    f"Invalid API request URL - Response 400: code 1005 {data.get('error', {}).get('message')}")
-            elif error_code == 1006:
-                bot.send_message(message.chat.id, "City not found, please check the city name.")
-                count_user_errors.labels(instance=instance_id).inc()
-                logging.error(f"City not found - Response 400: code 1006 {data.get('error', {}).get('message')}")
-            elif error_code == 9999:
-                bot.send_message(message.chat.id, "Internal application error. Please try again later.")
-                logging.error(
-                    f"Internal application error - Response 400: code 9999 {data.get('error', {}).get('message')}")
-            else:
-                bot.send_message(message.chat.id, "Unknown error. Please try again later.")
-                logging.error(f"Unknown error - Response 400 code {data.get('error', {}).get('message')}")
-                logging.debug(f"Exception traceback: \n {traceback.format_exc()}")
-        elif response.status_code == 401:
-            error_code = data.get('error', {}).get('code')
-            if error_code == 1002:
-                bot.send_message(message.chat.id, "API key not provided. Please contact support.")
-                logging.error(f"API key not provided - Response 401: code 1002 {data.get('error', {}).get('message')}")
-            elif error_code == 2006:
-                bot.send_message(message.chat.id, "The provided API key is invalid. Please contact support.")
-                logging.error(f"Invalid API key - Response 401: code 2006 {data.get('error', {}).get('message')}")
-        elif response.status_code == 403:
-            error_code = data.get('error', {}).get('code')
-            if error_code == 2007:
-                bot.send_message(message.chat.id,
-                                 "API key has exceeded the monthly call quota. Please contact support.")
-                logging.error(
-                    f"API key exceeded monthly call quota - Response 403: code 2007 {data.get('error', {}).get('message')}")
-            elif error_code == 2008:
-                bot.send_message(message.chat.id, "API key is disabled. Please contact support.")
-                logging.error(f"API key disabled - Response 403: code 2008 {data.get('error', {}).get('message')}")
-            elif error_code == 2009:
-                bot.send_message(message.chat.id,
-                                 "API key does not have access to the requested resource. Please contact support.")
-                logging.error(
-                    f"API key does not have access - Response 403: code 2009 {data.get('error', {}).get('message')}")
-        elif response.status_code == 404:
-            bot.send_message(message.chat.id,
-                             "Requested resource not found, please try again later or contact support.")
-            logging.error("Response 404: Not found")
-        elif response.status_code == 500:
-            bot.send_message(message.chat.id, "Internal server error. Please try again later.")
-            logging.error("Response 500: Internal server error")
-        elif response.status_code == 502:
-            bot.send_message(message.chat.id, "Bad gateway error. Please try again later.")
-            logging.error("Response 502: Bad gateway")
-        else:
-            bot.send_message(message.chat.id, "Error retrieving weather data, please try again later.")
-            logging.error(f"Response {response.status_code}: {data.get('error', {}).get('message')}")
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_url) as response:
+                data = await response.json(content_type=None)
+                if response.status == 200:
+                    logging.debug("Response 200")
+                    return data
+                elif response.status == 400:
+                    error_code = data.get('error', {}).get('code')
+                    if error_code == 1005:
+                        await bot.send_message(message.chat.id, "Invalid API request URL. Please try again later.")
+                        logging.error(
+                            f"Invalid API request URL - Response 400: code 1005 {data.get('error', {}).get('message')}")
+                    elif error_code == 1006:
+                        await bot.send_message(message.chat.id, "City not found, please check the city name.")
+                        count_user_errors.labels(instance=instance_id).inc()
+                        logging.error(f"City not found - Response 400: code 1006 {data.get('error', {}).get('message')}")
+                    elif error_code == 9999:
+                        await bot.send_message(message.chat.id, "Internal application error. Please try again later.")
+                        logging.error(
+                            f"Internal application error - Response 400: code 9999 {data.get('error', {}).get('message')}")
+                    else:
+                        await bot.send_message(message.chat.id, "Unknown error. Please try again later.")
+                        logging.error(f"Unknown error - Response 400 code {data.get('error', {}).get('message')}")
+                        logging.debug(f"Exception traceback: \n {traceback.format_exc()}")
+                elif response.status == 401:
+                    external_api_error.labels(instance=instance_id, status_code=response.status).inc()
+                    error_code = data.get('error', {}).get('code')
+                    if error_code == 1002:
+                        await bot.send_message(message.chat.id, "API key not provided. Please contact support.")
+                        logging.error(f"API key not provided - Response 401: code 1002 {data.get('error', {}).get('message')}")
+                    elif error_code == 2006:
+                        await bot.send_message(message.chat.id, "The provided API key is invalid. Please contact support.")
+                        logging.error(f"Invalid API key - Response 401: code 2006 {data.get('error', {}).get('message')}")
+                elif response.status == 403:
+                    external_api_error.labels(instance=instance_id, status_code=response.status).inc()
+                    error_code = data.get('error', {}).get('code')
+                    if error_code == 2007:
+                        await bot.send_message(message.chat.id,
+                                         "API key has exceeded the monthly call quota. Please contact support.")
+                        logging.error(
+                            f"API key exceeded monthly call quota - Response 403: code 2007 {data.get('error', {}).get('message')}")
+                    elif error_code == 2008:
+                        await bot.send_message(message.chat.id, "API key is disabled. Please contact support.")
+                        logging.error(f"API key disabled - Response 403: code 2008 {data.get('error', {}).get('message')}")
+                    elif error_code == 2009:
+                        await bot.send_message(message.chat.id,
+                                         "API key does not have access to the requested resource. Please contact support.")
+                        logging.error(
+                            f"API key does not have access - Response 403: code 2009 {data.get('error', {}).get('message')}")
+                elif response.status == 404:
+                    await bot.send_message(message.chat.id,
+                                     "Requested resource not found, please try again later or contact support.")
+                    logging.error("Response 404: Not found")
+                elif response.status == 500:
+                    await bot.send_message(message.chat.id, "Internal server error. Please try again later.")
+                    logging.error("Response 500: Internal server error")
+                elif response.status == 502:
+                    await bot.send_message(message.chat.id, "Bad gateway error. Please try again later.")
+                    logging.error("Response 502: Bad gateway")
+                else:
+                    await bot.send_message(message.chat.id, "Error retrieving weather data, please try again later.")
+                    logging.error(f"Response {response.status}: {data.get('error', {}).get('message')}")
     except Exception as e:
         count_instance_errors.labels(instance=instance_id).inc()
-        bot.send_message(message.chat.id, "An error occurred")
+        await bot.send_message(message.chat.id, "An error occurred")
         logging.error(f"Error in get_response: {str(e)}")
         logging.debug(f"Exception:\n {traceback.format_exc()}")
+
+
 
 
 def logging_config(log_level: str) -> None:
     """
     A function that configures logging based on the input log level.
 
-    :param LOG_LEVEL: The log level to set for the logging configuration.
+    :param log_level: The log level to set for the logging configuration.
     :return: None
     """
     numeric_level = getattr(logging, log_level.upper())

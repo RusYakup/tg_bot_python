@@ -188,10 +188,17 @@ async def execute_query(pool: asyncpg.Pool, query: str, *args,
         except asyncpg.QueryCanceledError as e:
             log.error(f"Query canceled error: {e} {traceback.format_exc()}")
             database_errors_counters[1].labels(instance=instance_id).inc()  # database_query_errors
+        except RuntimeError as e:
+            log.error(f"Runtime error: {e} {traceback.format_exc()}")
+            retries += 1
+            if retries < max_retries:
+                log.info(f"Retrying query {retries} of {max_retries}")
+            else:
+                database_errors_counters[3].labels(instance=instance_id).inc()
+                raise Exception("Max retries exceeded")
         except Exception as e:
             log.error(f"Unexpected error: {e} {traceback.format_exc()} {query} {args}")
             database_errors_counters[2].labels(instance=instance_id).inc()  # database_other_errors
-    raise Exception("Max retries exceeded")
 
 # @log_database_query
 # async def add_user_id(chat_id, pool: Pool = Depends(DbPool.get_pool)):
