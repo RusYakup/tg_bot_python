@@ -14,6 +14,7 @@ x-logging: &logging
       max-size: ${LOG_MAX_SIZE:-5m}
       max-file: ${LOG_MAX_FILE:-1}
 
+
 services:
   loki:
     image: grafana/loki
@@ -37,7 +38,7 @@ services:
           memory: ${LOKI_MEMORY_REQUESTS:- 128M}
     volumes:
       - *host_localtime
-      - ./monitoring-init/loki/loki.conf:/loki/etc/loki.conf
+      - ../monitoring-init/loki/loki.conf:/loki/etc/loki.conf
     #      - type: volume
     #        source: loki_data
     #        target: /loki
@@ -188,6 +189,14 @@ services:
     networks:
       - external
     <<: *logging
+
+volumes:
+  postgres_data:
+    driver: local
+
+  prometheus_data:
+    driver: local
+
 networks:
   internal:
     name: bot_internal
