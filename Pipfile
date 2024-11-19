@@ -4,15 +4,24 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-aiohttp = "*"
-requests = "*"
-pyTelegramBotAPI = "==4.16.1"
-
+requests = "==2.32.3"
+pyTelegramBotAPI = "==4.23.0"
+aiohttp = "==3.10.10"
 python-dotenv = "==1.0.1"
 pydantic = "==2.6.4"
+fastapi = "==0.110.1"
+uvicorn = "==0.29.0"
+pydantic-settings = "==2.2.1"
+asyncpg = "==0.29.0"
+uvloop = "==0.19.0"
+prometheus-client = "==0.21.0"
+prometheus-fastapi-instrumentator = "==7.0.0"
+apscheduler = "==3.10.1"
+pytest = "==8.3.3"
 
 [dev-packages]
-coverage = "*"
+coverage = "7.6.4"
+
 
 [requires]
 python_version = "3.11"

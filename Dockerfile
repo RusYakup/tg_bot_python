@@ -1,13 +1,10 @@
 # Этап 1: Сборка зависимостей
 FROM python:3.11-alpine AS builder
+
 WORKDIR /app
 COPY . /app
-RUN pip install pipenv
+#COPY ../.env /.env
+RUN pip install --timeout=120 pipenv
+RUN pipenv install --system
 
-# Этап 2: Запуск приложения
-FROM python:3.11-alpine
-RUN pip install pipenv
-WORKDIR /app
-COPY --from=builder /app /app
-RUN pipenv install --system --deploy
-CMD ["python", "main.py"]
+#CMD ["python", "-m", "src.app"]
