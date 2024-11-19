@@ -1,5 +1,5 @@
 from decorators.decorators import log_database_query
-from postgres.sqlfactory import (select, where, order_by, limit, group_by)
+from postgres.sqlfactory import SQLQueryBuilder
 from postgres.database_adapters import execute_query
 from asyncpg import Pool
 import logging
@@ -23,17 +23,15 @@ async def execute_users_actions(pool: Pool, chat_id: int = None, from_ts: int = 
     if until_ts is not None:
         conditions["ts"] = ("<", until_ts)
     try:
-        sql_select = select("statistic", [])
-        query, args = where(sql_select, conditions)  #
-        query = order_by(query, "ts", "DESC")
-        query, args = limit(query, limits, args)
-
+        builder = SQLQueryBuilder("statistic")
+        builder.select().where(conditions).order_by("ts", "DESC").limit(limits)
+        sql, args = builder.build()
     except Exception as e:
         log.error("execute_users_actions: An error occurred: %s", str(e))
         log.debug(f"execute_users_actions: Exception traceback: \n {traceback.format_exc()}")
         raise
     try:
-        res = await execute_query(pool, query, *args, fetch=True)
+        res = await execute_query(pool, sql, *args, fetch=True)
     except Exception as e:
         log.error("execute_users_actions:An error occurred: %s", str(e))
         log.debug(f"execute_users_actions: Exception traceback: \n {traceback.format_exc()}")
@@ -53,15 +51,10 @@ async def execute_actions_count(pool: Pool, chat_id: int):
             "DATE_TRUNC('month', to_timestamp(ts)) AS month",
             "COUNT(*) AS actions_count"
         ]
-        sql_select = select("statistic", fields_select)
-        conditions = {
-            "chat_id": ("=", chat_id)
-        }
-        sql, args = where(sql_select, conditions)
-
-        group_by_columns = ["chat_id", "month"]
-        sql_group_by = group_by(sql, group_by_columns)
-        res = await execute_query(pool, sql_group_by, *args, fetch=True)
+        bilder = SQLQueryBuilder("statistic")
+        bilder.select(fields_select).where({"chat_id": ("=", chat_id)}).group_by(["chat_id", "month"])
+        sql, args = bilder.build()
+        res = await execute_query(pool, sql, *args, fetch=True)
         return res
     except Exception as e:
         log.error("An error occurred: %s", str(e))

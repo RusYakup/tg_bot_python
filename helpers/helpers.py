@@ -1,5 +1,3 @@
-import json
-
 import aiohttp
 import requests
 import sys
@@ -18,6 +16,7 @@ def check_bot_token(token: str) -> None:
     A function to check the validity of a Telegram bot token by making a request to the Telegram API.
 
     Parameters:
+        token (object): 
     token (str): The token of the Telegram bot to be checked.
 
     Returns:
@@ -49,7 +48,6 @@ def check_api_key(api_key: str) -> None:
     try:
         response = requests.get(url)
         response.raise_for_status()
-        log.info("The API key is correct.")
     except requests.exceptions.RequestException as e:
         log.critical("Error verifying API key")
         log.debug(f"Exception: {e}")
@@ -189,7 +187,8 @@ async def get_response(message, api_url: str, bot: AsyncTeleBot) -> Dict[str, An
                     elif error_code == 1006:
                         await bot.send_message(message.chat.id, "City not found, please check the city name.")
                         count_user_errors.labels(instance=instance_id).inc()
-                        logging.error(f"City not found - Response 400: code 1006 {data.get('error', {}).get('message')}")
+                        logging.error(
+                            f"City not found - Response 400: code 1006 {data.get('error', {}).get('message')}")
                     elif error_code == 9999:
                         await bot.send_message(message.chat.id, "Internal application error. Please try again later.")
                         logging.error(
@@ -203,29 +202,33 @@ async def get_response(message, api_url: str, bot: AsyncTeleBot) -> Dict[str, An
                     error_code = data.get('error', {}).get('code')
                     if error_code == 1002:
                         await bot.send_message(message.chat.id, "API key not provided. Please contact support.")
-                        logging.error(f"API key not provided - Response 401: code 1002 {data.get('error', {}).get('message')}")
+                        logging.error(
+                            f"API key not provided - Response 401: code 1002 {data.get('error', {}).get('message')}")
                     elif error_code == 2006:
-                        await bot.send_message(message.chat.id, "The provided API key is invalid. Please contact support.")
-                        logging.error(f"Invalid API key - Response 401: code 2006 {data.get('error', {}).get('message')}")
+                        await bot.send_message(message.chat.id,
+                                               "The provided API key is invalid. Please contact support.")
+                        logging.error(
+                            f"Invalid API key - Response 401: code 2006 {data.get('error', {}).get('message')}")
                 elif response.status == 403:
                     external_api_error.labels(instance=instance_id, status_code=response.status).inc()
                     error_code = data.get('error', {}).get('code')
                     if error_code == 2007:
                         await bot.send_message(message.chat.id,
-                                         "API key has exceeded the monthly call quota. Please contact support.")
+                                               "API key has exceeded the monthly call quota. Please contact support.")
                         logging.error(
                             f"API key exceeded monthly call quota - Response 403: code 2007 {data.get('error', {}).get('message')}")
                     elif error_code == 2008:
                         await bot.send_message(message.chat.id, "API key is disabled. Please contact support.")
-                        logging.error(f"API key disabled - Response 403: code 2008 {data.get('error', {}).get('message')}")
+                        logging.error(
+                            f"API key disabled - Response 403: code 2008 {data.get('error', {}).get('message')}")
                     elif error_code == 2009:
                         await bot.send_message(message.chat.id,
-                                         "API key does not have access to the requested resource. Please contact support.")
+                                               "API key does not have access to the requested resource. Please contact support.")
                         logging.error(
                             f"API key does not have access - Response 403: code 2009 {data.get('error', {}).get('message')}")
                 elif response.status == 404:
                     await bot.send_message(message.chat.id,
-                                     "Requested resource not found, please try again later or contact support.")
+                                           "Requested resource not found, please try again later or contact support.")
                     logging.error("Response 404: Not found")
                 elif response.status == 500:
                     await bot.send_message(message.chat.id, "Internal server error. Please try again later.")
@@ -241,8 +244,6 @@ async def get_response(message, api_url: str, bot: AsyncTeleBot) -> Dict[str, An
         await bot.send_message(message.chat.id, "An error occurred")
         logging.error(f"Error in get_response: {str(e)}")
         logging.debug(f"Exception:\n {traceback.format_exc()}")
-
-
 
 
 def logging_config(log_level: str) -> None:

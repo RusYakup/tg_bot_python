@@ -1,47 +1,66 @@
-import pytest
-from postgres.sqlfactory import select, where, order_by, limit, group_by, delete, insert, update
+from postgres.sqlfactory import SQLQueryBuilder
 
 
 def test_select():
-    fields = ["chat_id, city, last_name"]
-    assert select("users", fields) == "SELECT chat_id, city, last_name FROM users"
-    assert select("users", []) == "SELECT * FROM users"
+    fields = ["chat_id", "city", "last_name"]
+    builder = SQLQueryBuilder("users")
+    builder.select(fields)
+    assert builder.sql == "SELECT chat_id, city, last_name FROM users"
+    assert builder.args == []
 
 
 def test_delete():
-    assert delete("users_table") == "DELETE FROM users_table"
+    builder = SQLQueryBuilder("users_table")
+    builder.delete()
+    assert builder.sql == "DELETE FROM users_table"
+    assert builder.args == []
 
 
 def test_where():
-    sql = "SELECT chat_id, city FROM users"
+    builder = SQLQueryBuilder("users")
+    builder.select(["chat_id", "city"])
     fields = {
         "chat_id": ("=", "1809"),
         "city": ("=", "Kazan"),
     }
-    assert where(sql, fields) == ("SELECT chat_id, city FROM users WHERE chat_id = $1 AND city = $2", ["1809", "Kazan"])
+    builder.where(fields)
+    assert builder.sql == "SELECT chat_id, city FROM users WHERE chat_id = $1 AND city = $2"
+    assert builder.args == ["1809", "Kazan"]
 
 
 def test_limit():
-    sql = "SELECT * FROM users"
-    args = ["1809", "Kazan"]
-    assert limit(sql, 10, args) == ("SELECT * FROM users LIMIT $3", ["1809", "Kazan", 10])
+    builder = SQLQueryBuilder("users")
+    builder.select(["chat_id", "city"])
+    builder.limit(10)
+    assert builder.sql == "SELECT chat_id, city FROM users LIMIT $1"
+    assert builder.args == [10]
 
 
 def test_order_by():
-    assert order_by("SELECT * FROM users", "chat_id", "DESC") == "SELECT * FROM users ORDER BY chat_id DESC"
+    builder = SQLQueryBuilder("users")
+    builder.select(["chat_id", "city"])
+    builder.order_by("chat_id", "DESC")
+    assert builder.sql == "SELECT chat_id, city FROM users ORDER BY chat_id DESC"
+    assert builder.args == []
 
 
 def test_group_by():
-    sql = "SELECT chat_id FROM users"
-    assert group_by(sql, ["chat_id", "city"]) == "SELECT chat_id FROM users GROUP BY chat_id, city"
-    assert group_by(sql, ["chat_id"]) == "SELECT chat_id FROM users GROUP BY chat_id"
+    builder = SQLQueryBuilder("users")
+    builder.select(["chat_id", "city"])
+    builder.group_by(["chat_id", "city"])
+    assert builder.sql == "SELECT chat_id, city FROM users GROUP BY chat_id, city"
+    assert builder.args == []
 
 
 def test_update():
+    builder = SQLQueryBuilder("users")
     fields = {
         "city": "Moskva",
-        "date_difference": "waiting_value", }
-    assert update("users", fields) == ("UPDATE users SET city = $1, date_difference = $2", ["Moskva", "waiting_value"])
+        "date_difference": "waiting_value",
+    }
+    builder.update(fields)
+    assert builder.sql == "UPDATE users SET city = $1, date_difference = $2"
+    assert builder.args == ["Moskva", "waiting_value"]
 
 
 def test_insert():
@@ -58,11 +77,17 @@ def test_insert():
         "city": "Kazan",
         "last_name": "Yakupov",
     }
-    assert insert(table, fields) == (
-    'INSERT INTO users (chat_id, city, last_name) VALUES ($1, $2, $3)', ['1809', 'Kazan', 'Yakupov'])
-    assert insert(table, fields, on_conflict="chat_id") == (
-    'INSERT INTO users (chat_id, city, last_name) VALUES ($1, $2, $3) ON CONFLICT (chat_id) DO NOTHING',
-    ['1809', 'Kazan', 'Yakupov'])
-    assert insert(table, fields, on_conflict="chat_id", update_fields=["city"]) == (
-    'INSERT INTO users (chat_id, city, last_name) VALUES ($1, $2, $3) ON CONFLICT (chat_id) DO UPDATE SET city = EXCLUDED.city',
-    ['1809', 'Kazan', 'Yakupov'])
+    builder = SQLQueryBuilder(table)
+    builder.insert(fields)
+    assert builder.sql == 'INSERT INTO users (chat_id, city, last_name) VALUES ($1, $2, $3)'
+    assert builder.args == ['1809', 'Kazan', 'Yakupov']
+
+    builder = SQLQueryBuilder(table)
+    builder.insert(fields, on_conflict="chat_id")
+    assert builder.sql == 'INSERT INTO users (chat_id, city, last_name) VALUES ($1, $2, $3) ON CONFLICT (chat_id) DO NOTHING'
+    assert builder.args == ['1809', 'Kazan', 'Yakupov']
+
+    builder = SQLQueryBuilder(table)
+    builder.insert(fields, on_conflict="chat_id", update_fields=["city"])
+    assert builder.sql == 'INSERT INTO users (chat_id, city, last_name) VALUES ($1, $2, $3) ON CONFLICT (chat_id) DO UPDATE SET city = EXCLUDED.city'
+    assert builder.args == ['1809', 'Kazan', 'Yakupov']

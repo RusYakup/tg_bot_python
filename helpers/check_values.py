@@ -7,7 +7,7 @@ import traceback
 from decorators.decorators import log_database_query
 from postgres.database_adapters import execute_query, add_statistic_bd, sql_update_user_state_bd
 from asyncpg.pool import Pool
-from postgres.sqlfactory import select, where, insert, update
+from postgres.sqlfactory import SQLQueryBuilder
 from prometheus.couters import (unknown_command_counter, instance_id, count_instance_errors)
 
 log = logging.getLogger(__name__)
@@ -32,14 +32,15 @@ async def check_chat_id(pool: Pool, message):
         }
 
         on_conflict = "chat_id"
-        sql_insert, args_insert = insert("user_state", fields, on_conflict=on_conflict)
-        await execute_query(pool, sql_insert, *args_insert, fetch=True)
+        bulder = SQLQueryBuilder("user_state")
+        bulder.insert(fields, on_conflict=on_conflict)
+        sql, args = bulder.build()
+        await execute_query(pool, sql, *args, fetch=True)
 
-        sql_select = select("user_state", ["city", "date_difference", "qty_days"])
-        query, args = where(sql_select, {"chat_id": ("=", message.chat.id)})
-
-        res = await execute_query(pool, query, *args, fetch=True)
-
+        builder1 = SQLQueryBuilder("user_state")
+        builder1.select(["city", "date_difference", "qty_days"]).where({"chat_id": ("=", message.chat.id)})
+        sql1, args1 = builder1.build()
+        res = await execute_query(pool, sql1, *args1, fetch=True)
         decoded_result = [dict(r) for r in res][0]
         log.debug("user_state table updated successfully")
         return decoded_result

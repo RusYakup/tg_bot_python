@@ -7,6 +7,7 @@ class Condition(BaseModel):
     icon: str
     code: int
 
+
 class Location(BaseModel):
     name: str
     region: str
@@ -16,6 +17,7 @@ class Location(BaseModel):
     tz_id: str
     localtime_epoch: int
     localtime: str
+
 
 class DayDetails(BaseModel):
     maxtemp_c: float
@@ -38,6 +40,7 @@ class DayDetails(BaseModel):
     daily_chance_of_snow: int
     condition: Condition
     uv: float
+
 
 class CurrentWeather(BaseModel):
     last_updated_epoch: int
@@ -64,17 +67,19 @@ class CurrentWeather(BaseModel):
     gust_mph: float
     gust_kph: float
 
+
 class ForecastDay(BaseModel):
     date: str
     date_epoch: int
     day: DayDetails
     astro: dict  # You can create a Pydantic model for Astro if needed
 
+
 class Forecast(BaseModel):
     forecastday: List[ForecastDay]
+
 
 class WeatherData(BaseModel):
     location: Location
     current: CurrentWeather
     forecast: Forecast
-

@@ -29,5 +29,5 @@ async def create_pool() -> asyncpg.pool.Pool:
         return pool
     except Exception as e:
         log.error("Failed to connect to the database: %s", str(e))
-        log.debug("Exception traceback:\n%s", traceback.format_exc())
+        log.error("Exception traceback:\n%s", traceback.format_exc())
         exit(1)

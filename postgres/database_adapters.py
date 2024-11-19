@@ -6,7 +6,7 @@ from fastapi import HTTPException, Depends
 from decorators.decorators import log_database_query
 from prometheus.couters import instance_id, database_errors_counters, count_instance_errors
 from config.config import get_settings, Settings
-from postgres.sqlfactory import update, where, insert, delete
+from postgres.sqlfactory import SQLQueryBuilder
 from asyncpg import Pool
 from postgres.pool import DbPool
 from typing import Union, Optional
@@ -88,14 +88,13 @@ async def create_table(pool: Pool = Depends(DbPool.get_pool)):
 @log_database_query
 async def sql_update_user_state_bd(bot, pool: asyncpg.Pool, message, fields: str, new_state: str = "waiting_value"):
     try:
-        update_query, args = update("user_state", {fields: new_state})
-
         conditions = {
             "chat_id": ("=", message.chat.id),
         }
-        query_where, args_where = where(update_query, conditions)
-        args += args_where
-        await execute_query(pool, query_where, *args, fetch=True)
+        builder = SQLQueryBuilder("user_state")
+        builder.update({fields: new_state}).where(conditions)
+        sql, args = builder.build()
+        await execute_query(pool, sql, *args, fetch=True)
         if new_state == "waiting_value":
             log.info(f"User {message.chat.id} state waiting_value for data")
         else:
@@ -130,7 +129,9 @@ async def add_statistic_bd(pool: asyncpg.Pool, message):
         if message.text in command:
             fields = {"ts": message.date, "user_name": message.from_user.first_name, "chat_id": message.chat.id,
                       "action": message.text}
-            sql, args = insert("statistic", fields)
+            builder = SQLQueryBuilder("statistic")
+            builder.insert(fields)
+            sql, args = builder.build()
             await execute_query(pool, sql, *args, fetch=True)
             log.debug("Statistic added successfully")
             return

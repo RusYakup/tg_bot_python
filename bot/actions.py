@@ -7,8 +7,6 @@ from postgres.database_adapters import sql_update_user_state_bd
 import logging
 import traceback
 from prometheus.couters import count_user_errors, instance_id, count_instance_errors, validation_error
-
-validation_error
 from decorators.decorators import log_database_query
 
 log = logging.getLogger(__name__)
@@ -143,7 +141,8 @@ async def weather(message, bot, config, status_user):
             f"Temperature: {weather_data.current.temp_c}°C (feels like {weather_data.current.feelslike_c}°C)\n"
             f"Maximum temperature: {forecast.maxtemp_c}°C\n"
             f"Minimum temperature: {forecast.mintemp_c}°C\n"
-            f"{wind(weather_data.current.wind_dir, weather_data.current.wind_kph, weather_data.forecast.forecastday[0].day.maxwind_kph)}\n"
+            f"{wind(weather_data.current.wind_dir, weather_data.current.wind_kph,
+                    weather_data.forecast.forecastday[0].day.maxwind_kph)}\n"
             f"Humidity: {weather_data.current.humidity}% \n"
             f"Precipitation: {forecast.daily_chance_of_rain if weather_data.current.temp_c > 0 else forecast.daily_chance_of_snow}%\n"
             f"{forecast.condition.text}"
@@ -214,16 +213,19 @@ async def get_weather_forecast(pool, date_difference, message, bot, config, stat
     try:
         log.info(
             f"User requested weather forecast {date_difference} days")
-        url_forecast = f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&q={status_user["city"]}&days={date_difference}&aqi=no&alerts=no'
+        url_forecast = (f'http://api.weatherapi.com/v1/forecast.json?key={config.API_KEY}&'
+                        f'q={status_user["city"]}&days={date_difference}&aqi=no&alerts=no')
         data = await get_response(message, url_forecast, bot)
         weather_data = WeatherData.model_validate(data)
         correction_num = int(date_difference) - 2
         forecast_msg = (
-            f"{weather_data.location.name} ({weather_data.location.region}):{weather_data.forecast.forecastday[correction_num].date}\n"
+            f"{weather_data.location.name} ({weather_data.location.region}):{weather_data.forecast.forecastday
+            [correction_num].date}\n"
             f"Maximum temperature: {weather_data.forecast.forecastday[correction_num].day.maxtemp_c}°C\n"
             f"Minimum temperature: {weather_data.forecast.forecastday[correction_num].day.mintemp_c}°C\n"
             f"Wind up to {round(weather_data.forecast.forecastday[correction_num].day.maxwind_kph / 3.6)} m/s\n"
-            f"Precipitation: {weather_data.forecast.forecastday[correction_num].day.daily_chance_of_rain if weather_data.current.temp_c > 0 else weather_data.forecast.forecastday[1].day.daily_chance_of_snow}%\n"
+            f"Precipitation: {weather_data.forecast.forecastday[correction_num].day.daily_chance_of_rain if
+            weather_data.current.temp_c > 0 else weather_data.forecast.forecastday[1].day.daily_chance_of_snow}%\n"
             f"{weather_data.forecast.forecastday[correction_num].day.condition.text}")
         await bot.send_message(message.chat.id, forecast_msg)
         await sql_update_user_state_bd(bot, pool, message, "date_difference", "None")
@@ -287,12 +289,14 @@ async def get_forecast_several(message, bot, config, status_user):
             forecast = weather_data.forecast.forecastday[day_num]
             precipitation = weather_data.forecast.forecastday[day_num].day.condition
             await bot.send_message(message.chat.id,
-                                   f"{weather_data.location.name} ({weather_data.location.region}):{weather_data.forecast.forecastday[day_num].date}\n"
+                                   f"{weather_data.location.name} ({weather_data.location.region}):"
+                                   f"{weather_data.forecast.forecastday[day_num].date}\n"
                                    f"Maximum temperature: {forecast.day.maxtemp_c}°C\n"
                                    f"Minimum temperature: {forecast.day.mintemp_c}°C\n"
                                    f"Wind up to {round(forecast.day.maxwind_kph / 3.6)} m/s\n"
                                    f"Humidity: {forecast.day.avghumidity}% \n"
-                                   f"Precipitation probability: {forecast.day.daily_chance_of_rain if forecast.day.avgtemp_c > 0 else forecast.day.daily_chance_of_snow}%\n"
+                                   f"Precipitation probability: {forecast.day.daily_chance_of_rain if
+                                   forecast.day.avgtemp_c > 0 else forecast.day.daily_chance_of_snow}%\n"
                                    f"{precipitation.text}"
                                    )
         log.info(f"several forecast : Success")
